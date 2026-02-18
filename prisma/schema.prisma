@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RetroBoard {
+  id          Int           @id @default(autoincrement())
+  userId      String
+  name        String
+  date        DateTime
+  description String        @default("")
+  columns     RetroColumn[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId])
+  @@map("retro_boards")
+}
+
+model RetroColumn {
+  id         Int         @id @default(autoincrement())
+  name       String
+  color      String
+  orderIndex Int
+  boardId    Int
+  board      RetroBoard  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  items      RetroItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([boardId, orderIndex])
+  @@map("retro_columns")
+}
+
+model RetroItem {
+  id          Int         @id @default(autoincrement())
+  description String
+  likes       String[]    @default([])
+  color       String?
+  rowIndex    Int
+  columnId    Int
+  column      RetroColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([columnId, rowIndex])
+  @@map("retro_items")
+}
