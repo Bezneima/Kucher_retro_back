@@ -25,6 +25,12 @@ export class UpdateColumnNameDto {
   name!: string;
 }
 
+export class UpdateColumnColorDto {
+  @ApiProperty({ example: '#34d399' })
+  @IsString()
+  color!: string;
+}
+
 export class CreateColumnDto {
   @ApiPropertyOptional({ example: 'Новая колонка' })
   @IsOptional()

@@ -7,6 +7,7 @@ import {
   ReorderColumnsDto,
   SyncItemPositionsDto,
   ToggleItemLikeDto,
+  UpdateColumnColorDto,
   UpdateColumnNameDto,
   UpdateItemColorDto,
   UpdateItemDescriptionDto,
@@ -96,6 +97,22 @@ export class RetroController {
     return this.retroService.updateColumnName(columnId, body.name);
   }
 
+  @Patch('columns/:id/color')
+  @ApiOperation({ summary: 'Update column color' })
+  @ApiBody({
+    schema: {
+      example: {
+        color: '#34d399',
+      },
+    },
+  })
+  updateColumnColor(
+    @Param('id', ParseIntPipe) columnId: number,
+    @Body() body: UpdateColumnColorDto,
+  ) {
+    return this.retroService.updateColumnColor(columnId, body.color);
+  }
+
   @Patch('items/:itemId/description')
   @ApiOperation({ summary: 'Update item description' })
   @ApiBody({
@@ -172,6 +189,12 @@ export class RetroController {
     @Body() body: SyncItemPositionsDto,
   ) {
     return this.retroService.syncItemPositions(boardId, body.changes);
+  }
+
+  @Delete('columns/:columnId')
+  @ApiOperation({ summary: 'Delete column with all items' })
+  deleteColumn(@Param('columnId', ParseIntPipe) columnId: number) {
+    return this.retroService.deleteColumn(columnId);
   }
 
   @Delete('items/:itemId')

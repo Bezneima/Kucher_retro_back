@@ -147,6 +147,17 @@ export class RetroService {
     }
   }
 
+  async updateColumnColor(columnId: number, color: string) {
+    try {
+      return await this.prisma.retroColumn.update({
+        where: { id: columnId },
+        data: { color },
+      });
+    } catch {
+      throw new NotFoundException(`Column ${columnId} not found`);
+    }
+  }
+
   async updateItemDescription(itemId: number, description: string) {
     try {
       return await this.prisma.retroItem.update({
@@ -260,6 +271,32 @@ export class RetroService {
     );
 
     return { updated: changes.length };
+  }
+
+  async deleteColumn(columnId: number) {
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
+      select: { id: true, boardId: true, orderIndex: true },
+    });
+    if (!column) {
+      throw new NotFoundException(`Column ${columnId} not found`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.retroColumn.delete({
+        where: { id: columnId },
+      });
+
+      await tx.retroColumn.updateMany({
+        where: {
+          boardId: column.boardId,
+          orderIndex: { gt: column.orderIndex },
+        },
+        data: { orderIndex: { decrement: 1 } },
+      });
+    });
+
+    return { deleted: true };
   }
 
   async deleteItem(itemId: number) {
