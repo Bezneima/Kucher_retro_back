@@ -72,7 +72,12 @@ export class RetroService {
     return this.mapBoard(board).columns;
   }
 
-  async createColumn(boardId: number, name?: string, color?: string) {
+  async createColumn(
+    boardId: number,
+    name?: string,
+    description?: string,
+    color?: string,
+  ) {
     const board = await this.prisma.retroBoard.findUnique({
       where: { id: boardId },
       select: { id: true },
@@ -91,6 +96,7 @@ export class RetroService {
       data: {
         boardId,
         name: name ?? 'Новая колонка',
+        description: description ?? '',
         color: color ?? '#60a5fa',
         orderIndex: lastColumn ? lastColumn.orderIndex + 1 : 0,
       },
@@ -99,6 +105,7 @@ export class RetroService {
     return {
       id: createdColumn.id,
       name: createdColumn.name,
+      description: createdColumn.description,
       color: createdColumn.color,
       isNameEditing: false,
       items: [],
@@ -152,6 +159,17 @@ export class RetroService {
       return await this.prisma.retroColumn.update({
         where: { id: columnId },
         data: { color },
+      });
+    } catch {
+      throw new NotFoundException(`Column ${columnId} not found`);
+    }
+  }
+
+  async updateColumnDescription(columnId: number, description: string) {
+    try {
+      return await this.prisma.retroColumn.update({
+        where: { id: columnId },
+        data: { description },
       });
     } catch {
       throw new NotFoundException(`Column ${columnId} not found`);
@@ -330,6 +348,7 @@ export class RetroService {
       columns: board.columns.map((column) => ({
         id: column.id,
         name: column.name,
+        description: column.description,
         color: column.color,
         isNameEditing: false,
         items: column.items.map((item) => ({

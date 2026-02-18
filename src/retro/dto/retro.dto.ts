@@ -31,11 +31,22 @@ export class UpdateColumnColorDto {
   color!: string;
 }
 
+export class UpdateColumnDescriptionDto {
+  @ApiProperty({ example: 'Фокус: стабильность CI и speed delivery' })
+  @IsString()
+  description!: string;
+}
+
 export class CreateColumnDto {
   @ApiPropertyOptional({ example: 'Новая колонка' })
   @IsOptional()
   @IsString()
   name?: string;
+
+  @ApiPropertyOptional({ example: 'Подсказка для участников по заполнению колонки' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @ApiPropertyOptional({ example: '#60a5fa' })
   @IsOptional()

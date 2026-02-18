@@ -24,6 +24,7 @@ model RetroBoard {
 model RetroColumn {
   id         Int         @id @default(autoincrement())
   name       String
+  description String     @default("")
   color      String
   orderIndex Int
   boardId    Int

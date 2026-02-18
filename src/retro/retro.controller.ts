@@ -8,6 +8,7 @@ import {
   SyncItemPositionsDto,
   ToggleItemLikeDto,
   UpdateColumnColorDto,
+  UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
   UpdateItemColorDto,
   UpdateItemDescriptionDto,
@@ -62,7 +63,12 @@ export class RetroController {
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: CreateColumnDto,
   ) {
-    return this.retroService.createColumn(boardId, body.name, body.color);
+    return this.retroService.createColumn(
+      boardId,
+      body.name,
+      body.description,
+      body.color,
+    );
   }
 
   @Post('columns/:columnId/items')
@@ -111,6 +117,22 @@ export class RetroController {
     @Body() body: UpdateColumnColorDto,
   ) {
     return this.retroService.updateColumnColor(columnId, body.color);
+  }
+
+  @Patch('columns/:columnId/description')
+  @ApiOperation({ summary: 'Update column description' })
+  @ApiBody({
+    schema: {
+      example: {
+        description: 'Фокус: стабильность CI и speed delivery',
+      },
+    },
+  })
+  updateColumnDescription(
+    @Param('columnId', ParseIntPipe) columnId: number,
+    @Body() body: UpdateColumnDescriptionDto,
+  ) {
+    return this.retroService.updateColumnDescription(columnId, body.description);
   }
 
   @Patch('items/:itemId/description')
