@@ -67,12 +67,6 @@ export class UpdateItemDescriptionDto {
   description!: string;
 }
 
-export class ToggleItemLikeDto {
-  @ApiProperty({ example: 'user_42' })
-  @IsString()
-  userId!: string;
-}
-
 export class UpdateItemColorDto {
   @ApiPropertyOptional({ example: '#34d399' })
   @IsOptional()

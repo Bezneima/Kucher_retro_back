@@ -23,6 +23,7 @@ async function bootstrap() {
     .setTitle('Retro Board API')
     .setDescription('Starter API docs')
     .setVersion('1.0.0')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

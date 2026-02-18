@@ -17,6 +17,7 @@ const BOARD_INCLUDE = {
     },
   },
 } satisfies Prisma.RetroBoardInclude;
+
 type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
   include: typeof BOARD_INCLUDE;
 }>;
@@ -25,7 +26,7 @@ type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
 export class RetroService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createBoardForUser(userId: string, dto: CreateBoardDto) {
+  async createBoard(userId: string, dto: CreateBoardDto) {
     const board = await this.prisma.retroBoard.create({
       data: {
         userId,
@@ -58,36 +59,35 @@ export class RetroService {
     return this.mapBoard(board);
   }
 
-  async getBoards(userId?: string) {
+  async getBoards(userId: string) {
     const boards = await this.prisma.retroBoard.findMany({
-      where: userId ? { userId } : undefined,
+      where: { userId },
       include: BOARD_INCLUDE,
       orderBy: { id: 'asc' },
     });
+
     return boards.map((board) => this.mapBoard(board));
   }
 
-  async getBoardColumns(boardId: number) {
-    const board = await this.getBoardOrFail(boardId);
+  async getBoardColumns(boardId: number, userId: string) {
+    const board = await this.getBoardOrFail(boardId, userId);
     return this.mapBoard(board).columns;
   }
 
   async createColumn(
     boardId: number,
+    userId: string,
     name?: string,
     description?: string,
     color?: string,
   ) {
-    const board = await this.prisma.retroBoard.findUnique({
-      where: { id: boardId },
-      select: { id: true },
-    });
-    if (!board) {
-      throw new NotFoundException(`Board ${boardId} not found`);
-    }
+    await this.ensureBoardOwned(boardId, userId);
 
     const lastColumn = await this.prisma.retroColumn.findFirst({
-      where: { boardId },
+      where: {
+        boardId,
+        board: { userId },
+      },
       orderBy: { orderIndex: 'desc' },
       select: { orderIndex: true },
     });
@@ -112,11 +112,15 @@ export class RetroService {
     };
   }
 
-  async addItemToColumn(columnId: number, description?: string) {
-    const column = await this.prisma.retroColumn.findUnique({
-      where: { id: columnId },
+  async addItemToColumn(columnId: number, userId: string, description?: string) {
+    const column = await this.prisma.retroColumn.findFirst({
+      where: {
+        id: columnId,
+        board: { userId },
+      },
       select: { id: true, orderIndex: true },
     });
+
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
@@ -143,55 +147,49 @@ export class RetroService {
     };
   }
 
-  async updateColumnName(columnId: number, name: string) {
-    try {
-      return await this.prisma.retroColumn.update({
-        where: { id: columnId },
-        data: { name },
-      });
-    } catch {
-      throw new NotFoundException(`Column ${columnId} not found`);
-    }
+  async updateColumnName(columnId: number, userId: string, name: string) {
+    await this.ensureColumnOwned(columnId, userId);
+    return this.prisma.retroColumn.update({
+      where: { id: columnId },
+      data: { name },
+    });
   }
 
-  async updateColumnColor(columnId: number, color: string) {
-    try {
-      return await this.prisma.retroColumn.update({
-        where: { id: columnId },
-        data: { color },
-      });
-    } catch {
-      throw new NotFoundException(`Column ${columnId} not found`);
-    }
+  async updateColumnColor(columnId: number, userId: string, color: string) {
+    await this.ensureColumnOwned(columnId, userId);
+    return this.prisma.retroColumn.update({
+      where: { id: columnId },
+      data: { color },
+    });
   }
 
-  async updateColumnDescription(columnId: number, description: string) {
-    try {
-      return await this.prisma.retroColumn.update({
-        where: { id: columnId },
-        data: { description },
-      });
-    } catch {
-      throw new NotFoundException(`Column ${columnId} not found`);
-    }
+  async updateColumnDescription(columnId: number, userId: string, description: string) {
+    await this.ensureColumnOwned(columnId, userId);
+    return this.prisma.retroColumn.update({
+      where: { id: columnId },
+      data: { description },
+    });
   }
 
-  async updateItemDescription(itemId: number, description: string) {
-    try {
-      return await this.prisma.retroItem.update({
-        where: { id: itemId },
-        data: { description },
-      });
-    } catch {
-      throw new NotFoundException(`Item ${itemId} not found`);
-    }
+  async updateItemDescription(itemId: number, userId: string, description: string) {
+    await this.ensureItemOwned(itemId, userId);
+    return this.prisma.retroItem.update({
+      where: { id: itemId },
+      data: { description },
+    });
   }
 
   async toggleItemLike(itemId: number, userId: string) {
-    const item = await this.prisma.retroItem.findUnique({
-      where: { id: itemId },
+    const item = await this.prisma.retroItem.findFirst({
+      where: {
+        id: itemId,
+        column: {
+          board: { userId },
+        },
+      },
       select: { likes: true },
     });
+
     if (!item) {
       throw new NotFoundException(`Item ${itemId} not found`);
     }
@@ -210,26 +208,30 @@ export class RetroService {
     });
   }
 
-  async updateItemColor(itemId: number, color?: string) {
-    try {
-      return await this.prisma.retroItem.update({
-        where: { id: itemId },
-        data: { color: color ?? null },
-      });
-    } catch {
-      throw new NotFoundException(`Item ${itemId} not found`);
-    }
+  async updateItemColor(itemId: number, userId: string, color?: string) {
+    await this.ensureItemOwned(itemId, userId);
+    return this.prisma.retroItem.update({
+      where: { id: itemId },
+      data: { color: color ?? null },
+    });
   }
 
-  async reorderColumns(boardId: number, oldIndex: number, newIndex: number) {
+  async reorderColumns(boardId: number, userId: string, oldIndex: number, newIndex: number) {
+    await this.ensureBoardOwned(boardId, userId);
+
     const columns = await this.prisma.retroColumn.findMany({
-      where: { boardId },
+      where: {
+        boardId,
+        board: { userId },
+      },
       orderBy: { orderIndex: 'asc' },
       select: { id: true, orderIndex: true },
     });
+
     if (columns.length === 0) {
       throw new NotFoundException(`Board ${boardId} has no columns`);
     }
+
     if (
       oldIndex < 0 ||
       newIndex < 0 ||
@@ -252,50 +254,77 @@ export class RetroService {
       ),
     );
 
-    return this.getBoardColumns(boardId);
+    return this.getBoardColumns(boardId, userId);
   }
 
-  async syncItemPositions(boardId: number, changes: ItemPositionChangeDto[]) {
+  async syncItemPositions(boardId: number, userId: string, changes: ItemPositionChangeDto[]) {
     if (changes.length === 0) {
       return { updated: 0 };
     }
 
+    await this.ensureBoardOwned(boardId, userId);
+
     const columns = await this.prisma.retroColumn.findMany({
-      where: { boardId },
+      where: {
+        boardId,
+        board: { userId },
+      },
       select: { id: true },
     });
+
     if (columns.length === 0) {
       throw new NotFoundException(`Board ${boardId} has no columns`);
     }
 
     const allowedColumnIds = new Set(columns.map((column) => column.id));
 
-    await this.prisma.$transaction(
-      changes.map((change) => {
-        if (!allowedColumnIds.has(change.newColumnId)) {
-          throw new BadRequestException(
-            `Column id ${change.newColumnId} not found`,
-          );
-        }
+    for (const change of changes) {
+      if (!allowedColumnIds.has(change.newColumnId)) {
+        throw new BadRequestException(`Column id ${change.newColumnId} not found`);
+      }
+    }
 
-        return this.prisma.retroItem.update({
+    const uniqueItemIds = Array.from(new Set(changes.map((change) => change.itemId)));
+
+    const items = await this.prisma.retroItem.findMany({
+      where: {
+        id: { in: uniqueItemIds },
+        column: {
+          boardId,
+          board: { userId },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (items.length !== uniqueItemIds.length) {
+      throw new NotFoundException('One or more items not found');
+    }
+
+    await this.prisma.$transaction(
+      changes.map((change) =>
+        this.prisma.retroItem.update({
           where: { id: change.itemId },
           data: {
             columnId: change.newColumnId,
             rowIndex: change.newRowIndex,
           },
-        });
-      }),
+        }),
+      ),
     );
 
     return { updated: changes.length };
   }
 
-  async deleteColumn(columnId: number) {
-    const column = await this.prisma.retroColumn.findUnique({
-      where: { id: columnId },
+  async deleteColumn(columnId: number, userId: string) {
+    const column = await this.prisma.retroColumn.findFirst({
+      where: {
+        id: columnId,
+        board: { userId },
+      },
       select: { id: true, boardId: true, orderIndex: true },
     });
+
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
@@ -317,26 +346,74 @@ export class RetroService {
     return { deleted: true };
   }
 
-  async deleteItem(itemId: number) {
-    try {
-      await this.prisma.retroItem.delete({
-        where: { id: itemId },
-      });
-      return { deleted: true };
-    } catch {
-      throw new NotFoundException(`Item ${itemId} not found`);
-    }
+  async deleteItem(itemId: number, userId: string) {
+    await this.ensureItemOwned(itemId, userId);
+
+    await this.prisma.retroItem.delete({
+      where: { id: itemId },
+    });
+
+    return { deleted: true };
   }
 
-  private async getBoardOrFail(boardId: number) {
-    const board = await this.prisma.retroBoard.findUnique({
-      where: { id: boardId },
+  private async getBoardOrFail(boardId: number, userId: string) {
+    const board = await this.prisma.retroBoard.findFirst({
+      where: {
+        id: boardId,
+        userId,
+      },
       include: BOARD_INCLUDE,
     });
+
     if (!board) {
       throw new NotFoundException(`Board ${boardId} not found`);
     }
+
     return board;
+  }
+
+  private async ensureBoardOwned(boardId: number, userId: string) {
+    const board = await this.prisma.retroBoard.findFirst({
+      where: {
+        id: boardId,
+        userId,
+      },
+      select: { id: true },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+  }
+
+  private async ensureColumnOwned(columnId: number, userId: string) {
+    const column = await this.prisma.retroColumn.findFirst({
+      where: {
+        id: columnId,
+        board: { userId },
+      },
+      select: { id: true },
+    });
+
+    if (!column) {
+      throw new NotFoundException(`Column ${columnId} not found`);
+    }
+  }
+
+  private async ensureItemOwned(itemId: number, userId: string) {
+    const item = await this.prisma.retroItem.findFirst({
+      where: {
+        id: itemId,
+        column: {
+          board: { userId },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!item) {
+      throw new NotFoundException(`Item ${itemId} not found`);
+    }
   }
 
   private mapBoard(board: RetroBoardWithColumns) {

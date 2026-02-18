@@ -10,6 +10,7 @@ datasource db {
 model RetroBoard {
   id          Int           @id @default(autoincrement())
   userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   date        DateTime
   description String        @default("")
@@ -19,6 +20,33 @@ model RetroBoard {
 
   @@index([userId])
   @@map("retro_boards")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String?
+  boards        RetroBoard[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 model RetroColumn {

@@ -1,12 +1,13 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   CreateColumnDto,
   CreateItemDto,
   CreateBoardDto,
   ReorderColumnsDto,
   SyncItemPositionsDto,
-  ToggleItemLikeDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
@@ -16,13 +17,13 @@ import {
 import { RetroService } from './retro.service';
 
 @ApiTags('retro')
+@ApiBearerAuth()
 @Controller('retro')
 export class RetroController {
   constructor(private readonly retroService: RetroService) {}
 
-  @Post('users/:userId/boards')
-  @ApiOperation({ summary: 'Create new board for user' })
-  @ApiParam({ name: 'userId', example: 'user_42' })
+  @Post('boards')
+  @ApiOperation({ summary: 'Create new board for current user' })
   @ApiBody({
     schema: {
       example: {
@@ -32,21 +33,23 @@ export class RetroController {
       },
     },
   })
-  createBoardForUser(@Param('userId') userId: string, @Body() body: CreateBoardDto) {
-    return this.retroService.createBoardForUser(userId, body);
+  createBoard(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateBoardDto) {
+    return this.retroService.createBoard(user.id, body);
   }
 
   @Get('boards')
-  @ApiOperation({ summary: 'Get all retro boards' })
-  @ApiQuery({ name: 'userId', required: false, example: 'user_42' })
-  getBoards(@Query('userId') userId?: string) {
-    return this.retroService.getBoards(userId);
+  @ApiOperation({ summary: 'Get all retro boards for current user' })
+  getBoards(@CurrentUser() user: AuthenticatedUser) {
+    return this.retroService.getBoards(user.id);
   }
 
   @Get('boards/:boardId/columns')
   @ApiOperation({ summary: 'Get board columns' })
-  getBoardColumns(@Param('boardId', ParseIntPipe) boardId: number) {
-    return this.retroService.getBoardColumns(boardId);
+  getBoardColumns(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId', ParseIntPipe) boardId: number,
+  ) {
+    return this.retroService.getBoardColumns(boardId, user.id);
   }
 
   @Post('boards/:boardId/columns')
@@ -60,11 +63,13 @@ export class RetroController {
     },
   })
   createColumn(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: CreateColumnDto,
   ) {
     return this.retroService.createColumn(
       boardId,
+      user.id,
       body.name,
       body.description,
       body.color,
@@ -81,10 +86,11 @@ export class RetroController {
     },
   })
   addItemToColumn(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: CreateItemDto,
   ) {
-    return this.retroService.addItemToColumn(columnId, body.description);
+    return this.retroService.addItemToColumn(columnId, user.id, body.description);
   }
 
   @Patch('columns/:columnId/name')
@@ -97,10 +103,11 @@ export class RetroController {
     },
   })
   updateColumnName(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnNameDto,
   ) {
-    return this.retroService.updateColumnName(columnId, body.name);
+    return this.retroService.updateColumnName(columnId, user.id, body.name);
   }
 
   @Patch('columns/:id/color')
@@ -113,10 +120,11 @@ export class RetroController {
     },
   })
   updateColumnColor(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnColorDto,
   ) {
-    return this.retroService.updateColumnColor(columnId, body.color);
+    return this.retroService.updateColumnColor(columnId, user.id, body.color);
   }
 
   @Patch('columns/:columnId/description')
@@ -129,10 +137,11 @@ export class RetroController {
     },
   })
   updateColumnDescription(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnDescriptionDto,
   ) {
-    return this.retroService.updateColumnDescription(columnId, body.description);
+    return this.retroService.updateColumnDescription(columnId, user.id, body.description);
   }
 
   @Patch('items/:itemId/description')
@@ -145,23 +154,20 @@ export class RetroController {
     },
   })
   updateItemDescription(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() body: UpdateItemDescriptionDto,
   ) {
-    return this.retroService.updateItemDescription(itemId, body.description);
+    return this.retroService.updateItemDescription(itemId, user.id, body.description);
   }
 
   @Patch('items/:itemId/like')
-  @ApiOperation({ summary: 'Toggle item like by userId' })
-  @ApiBody({
-    schema: {
-      example: {
-        userId: 'user_42',
-      },
-    },
-  })
-  toggleItemLike(@Param('itemId', ParseIntPipe) itemId: number, @Body() body: ToggleItemLikeDto) {
-    return this.retroService.toggleItemLike(itemId, body.userId);
+  @ApiOperation({ summary: 'Toggle item like for current user' })
+  toggleItemLike(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    return this.retroService.toggleItemLike(itemId, user.id);
   }
 
   @Patch('items/:itemId/color')
@@ -174,10 +180,11 @@ export class RetroController {
     },
   })
   updateItemColor(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() body: UpdateItemColorDto,
   ) {
-    return this.retroService.updateItemColor(itemId, body.color);
+    return this.retroService.updateItemColor(itemId, user.id, body.color);
   }
 
   @Patch('boards/:boardId/columns/reorder')
@@ -191,10 +198,11 @@ export class RetroController {
     },
   })
   reorderColumns(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: ReorderColumnsDto,
   ) {
-    return this.retroService.reorderColumns(boardId, body.oldIndex, body.newIndex);
+    return this.retroService.reorderColumns(boardId, user.id, body.oldIndex, body.newIndex);
   }
 
   @Patch('boards/:boardId/items/positions')
@@ -207,21 +215,25 @@ export class RetroController {
     },
   })
   syncItemPositions(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: SyncItemPositionsDto,
   ) {
-    return this.retroService.syncItemPositions(boardId, body.changes);
+    return this.retroService.syncItemPositions(boardId, user.id, body.changes);
   }
 
   @Delete('columns/:columnId')
   @ApiOperation({ summary: 'Delete column with all items' })
-  deleteColumn(@Param('columnId', ParseIntPipe) columnId: number) {
-    return this.retroService.deleteColumn(columnId);
+  deleteColumn(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('columnId', ParseIntPipe) columnId: number,
+  ) {
+    return this.retroService.deleteColumn(columnId, user.id);
   }
 
   @Delete('items/:itemId')
   @ApiOperation({ summary: 'Delete item' })
-  deleteItem(@Param('itemId', ParseIntPipe) itemId: number) {
-    return this.retroService.deleteItem(itemId);
+  deleteItem(@CurrentUser() user: AuthenticatedUser, @Param('itemId', ParseIntPipe) itemId: number) {
+    return this.retroService.deleteItem(itemId, user.id);
   }
 }
