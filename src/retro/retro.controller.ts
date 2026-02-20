@@ -1,11 +1,12 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   CreateColumnDto,
   CreateItemDto,
   CreateBoardDto,
+  GetBoardsQueryDto,
   ReorderColumnsDto,
   SyncItemPositionsDto,
   UpdateColumnColorDto,
@@ -23,10 +24,11 @@ export class RetroController {
   constructor(private readonly retroService: RetroService) {}
 
   @Post('boards')
-  @ApiOperation({ summary: 'Create new board for current user' })
+  @ApiOperation({ summary: 'Create new board for team (OWNER/ADMIN only)' })
   @ApiBody({
     schema: {
       example: {
+        teamId: 1,
         name: 'Sprint 12 Retro',
         date: '2026-02-16',
         description: 'Командная ретроспектива по спринту',
@@ -38,9 +40,15 @@ export class RetroController {
   }
 
   @Get('boards')
-  @ApiOperation({ summary: 'Get all retro boards for current user' })
-  getBoards(@CurrentUser() user: AuthenticatedUser) {
-    return this.retroService.getBoards(user.id);
+  @ApiOperation({ summary: 'Get retro boards for current user teams' })
+  @ApiQuery({
+    name: 'teamId',
+    required: false,
+    description: 'Filter boards by team id',
+    schema: { type: 'integer', minimum: 1 },
+  })
+  getBoards(@CurrentUser() user: AuthenticatedUser, @Query() query: GetBoardsQueryDto) {
+    return this.retroService.getBoards(user.id, query.teamId);
   }
 
   @Get('boards/:boardId/columns')

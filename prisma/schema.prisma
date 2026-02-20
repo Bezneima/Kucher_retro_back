@@ -7,10 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 model RetroBoard {
   id          Int           @id @default(autoincrement())
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId      Int
+  team        Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   name        String
   date        DateTime
   description String        @default("")
@@ -18,21 +24,48 @@ model RetroBoard {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  @@index([userId])
+  @@index([teamId])
   @@map("retro_boards")
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  passwordHash  String
-  name          String?
-  boards        RetroBoard[]
-  refreshTokens RefreshToken[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  email           String         @unique
+  passwordHash    String
+  name            String?
+  teamMemberships TeamMember[]
+  refreshTokens   RefreshToken[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@map("users")
+}
+
+model Team {
+  id        Int          @id @default(autoincrement())
+  name      String
+  members   TeamMember[]
+  boards    RetroBoard[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        Int      @id @default(autoincrement())
+  teamId    Int
+  userId    String
+  role      TeamRole
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_members")
 }
 
 model RefreshToken {

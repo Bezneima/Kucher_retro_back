@@ -1,9 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TeamRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBoardDto, ItemPositionChangeDto } from './dto/retro.dto';
 
@@ -27,9 +28,11 @@ export class RetroService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createBoard(userId: string, dto: CreateBoardDto) {
+    await this.ensureTeamAdminOrOwner(dto.teamId, userId);
+
     const board = await this.prisma.retroBoard.create({
       data: {
-        userId,
+        teamId: dto.teamId,
         name: dto.name ?? 'New board',
         date: dto.date ? new Date(dto.date) : new Date(),
         description: dto.description ?? '',
@@ -59,9 +62,20 @@ export class RetroService {
     return this.mapBoard(board);
   }
 
-  async getBoards(userId: string) {
+  async getBoards(userId: string, teamId?: number) {
+    if (teamId !== undefined) {
+      await this.ensureTeamMember(teamId, userId);
+    }
+
     const boards = await this.prisma.retroBoard.findMany({
-      where: { userId },
+      where: {
+        ...(teamId !== undefined ? { teamId } : {}),
+        team: {
+          members: {
+            some: { userId },
+          },
+        },
+      },
       include: BOARD_INCLUDE,
       orderBy: { id: 'asc' },
     });
@@ -81,12 +95,11 @@ export class RetroService {
     description?: string,
     color?: string,
   ) {
-    await this.ensureBoardOwned(boardId, userId);
+    await this.ensureBoardAccessible(boardId, userId);
 
     const lastColumn = await this.prisma.retroColumn.findFirst({
       where: {
         boardId,
-        board: { userId },
       },
       orderBy: { orderIndex: 'desc' },
       select: { orderIndex: true },
@@ -116,7 +129,13 @@ export class RetroService {
     const column = await this.prisma.retroColumn.findFirst({
       where: {
         id: columnId,
-        board: { userId },
+        board: {
+          team: {
+            members: {
+              some: { userId },
+            },
+          },
+        },
       },
       select: { id: true, orderIndex: true },
     });
@@ -148,7 +167,7 @@ export class RetroService {
   }
 
   async updateColumnName(columnId: number, userId: string, name: string) {
-    await this.ensureColumnOwned(columnId, userId);
+    await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
       data: { name },
@@ -156,7 +175,7 @@ export class RetroService {
   }
 
   async updateColumnColor(columnId: number, userId: string, color: string) {
-    await this.ensureColumnOwned(columnId, userId);
+    await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
       data: { color },
@@ -164,7 +183,7 @@ export class RetroService {
   }
 
   async updateColumnDescription(columnId: number, userId: string, description: string) {
-    await this.ensureColumnOwned(columnId, userId);
+    await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
       data: { description },
@@ -172,7 +191,7 @@ export class RetroService {
   }
 
   async updateItemDescription(itemId: number, userId: string, description: string) {
-    await this.ensureItemOwned(itemId, userId);
+    await this.ensureItemAccessible(itemId, userId);
     return this.prisma.retroItem.update({
       where: { id: itemId },
       data: { description },
@@ -184,7 +203,13 @@ export class RetroService {
       where: {
         id: itemId,
         column: {
-          board: { userId },
+          board: {
+            team: {
+              members: {
+                some: { userId },
+              },
+            },
+          },
         },
       },
       select: { likes: true },
@@ -209,7 +234,7 @@ export class RetroService {
   }
 
   async updateItemColor(itemId: number, userId: string, color?: string) {
-    await this.ensureItemOwned(itemId, userId);
+    await this.ensureItemAccessible(itemId, userId);
     return this.prisma.retroItem.update({
       where: { id: itemId },
       data: { color: color ?? null },
@@ -217,12 +242,11 @@ export class RetroService {
   }
 
   async reorderColumns(boardId: number, userId: string, oldIndex: number, newIndex: number) {
-    await this.ensureBoardOwned(boardId, userId);
+    await this.ensureBoardAccessible(boardId, userId);
 
     const columns = await this.prisma.retroColumn.findMany({
       where: {
         boardId,
-        board: { userId },
       },
       orderBy: { orderIndex: 'asc' },
       select: { id: true, orderIndex: true },
@@ -262,12 +286,11 @@ export class RetroService {
       return { updated: 0 };
     }
 
-    await this.ensureBoardOwned(boardId, userId);
+    await this.ensureBoardAccessible(boardId, userId);
 
     const columns = await this.prisma.retroColumn.findMany({
       where: {
         boardId,
-        board: { userId },
       },
       select: { id: true },
     });
@@ -291,7 +314,6 @@ export class RetroService {
         id: { in: uniqueItemIds },
         column: {
           boardId,
-          board: { userId },
         },
       },
       select: { id: true },
@@ -320,7 +342,13 @@ export class RetroService {
     const column = await this.prisma.retroColumn.findFirst({
       where: {
         id: columnId,
-        board: { userId },
+        board: {
+          team: {
+            members: {
+              some: { userId },
+            },
+          },
+        },
       },
       select: { id: true, boardId: true, orderIndex: true },
     });
@@ -347,7 +375,7 @@ export class RetroService {
   }
 
   async deleteItem(itemId: number, userId: string) {
-    await this.ensureItemOwned(itemId, userId);
+    await this.ensureItemAccessible(itemId, userId);
 
     await this.prisma.retroItem.delete({
       where: { id: itemId },
@@ -360,7 +388,11 @@ export class RetroService {
     const board = await this.prisma.retroBoard.findFirst({
       where: {
         id: boardId,
-        userId,
+        team: {
+          members: {
+            some: { userId },
+          },
+        },
       },
       include: BOARD_INCLUDE,
     });
@@ -372,13 +404,53 @@ export class RetroService {
     return board;
   }
 
-  private async ensureBoardOwned(boardId: number, userId: string) {
+  private async ensureTeamMember(teamId: number, userId: string) {
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId,
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!teamMember) {
+      throw new NotFoundException(`Team ${teamId} not found`);
+    }
+  }
+
+  private async ensureTeamAdminOrOwner(teamId: number, userId: string) {
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId,
+          userId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!teamMember) {
+      throw new NotFoundException(`Team ${teamId} not found`);
+    }
+
+    if (teamMember.role === TeamRole.MEMBER) {
+      throw new ForbiddenException('Insufficient permissions to create board');
+    }
+  }
+
+  private async ensureBoardAccessible(boardId: number, userId: string) {
     const board = await this.prisma.retroBoard.findFirst({
       where: {
         id: boardId,
-        userId,
+        team: {
+          members: {
+            some: { userId },
+          },
+        },
       },
-      select: { id: true },
+      select: { id: true, teamId: true },
     });
 
     if (!board) {
@@ -386,11 +458,17 @@ export class RetroService {
     }
   }
 
-  private async ensureColumnOwned(columnId: number, userId: string) {
+  private async ensureColumnAccessible(columnId: number, userId: string) {
     const column = await this.prisma.retroColumn.findFirst({
       where: {
         id: columnId,
-        board: { userId },
+        board: {
+          team: {
+            members: {
+              some: { userId },
+            },
+          },
+        },
       },
       select: { id: true },
     });
@@ -400,12 +478,18 @@ export class RetroService {
     }
   }
 
-  private async ensureItemOwned(itemId: number, userId: string) {
+  private async ensureItemAccessible(itemId: number, userId: string) {
     const item = await this.prisma.retroItem.findFirst({
       where: {
         id: itemId,
         column: {
-          board: { userId },
+          board: {
+            team: {
+              members: {
+                some: { userId },
+              },
+            },
+          },
         },
       },
       select: { id: true },
@@ -419,6 +503,7 @@ export class RetroService {
   private mapBoard(board: RetroBoardWithColumns) {
     return {
       id: board.id,
+      teamId: board.teamId,
       name: board.name,
       date: board.date.toISOString().slice(0, 10),
       description: board.description,

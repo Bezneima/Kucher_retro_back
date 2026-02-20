@@ -3,6 +3,12 @@ import { Type } from 'class-transformer';
 import { IsArray, IsDateString, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 export class CreateBoardDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  teamId!: number;
+
   @ApiPropertyOptional({ example: 'Sprint 12 Retro' })
   @IsOptional()
   @IsString()
@@ -17,6 +23,15 @@ export class CreateBoardDto {
   @IsOptional()
   @IsString()
   description?: string;
+}
+
+export class GetBoardsQueryDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  teamId?: number;
 }
 
 export class UpdateColumnNameDto {
