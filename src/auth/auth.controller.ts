@@ -1,8 +1,15 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
-import { LoginDto, LogoutDto, RefreshTokenDto, RegisterDto } from './dto/auth.dto';
+import {
+  ChangePasswordDto,
+  LoginDto,
+  LogoutDto,
+  RefreshTokenDto,
+  RegisterDto,
+  UpdateMeDto,
+} from './dto/auth.dto';
 import { AuthService } from './auth.service';
 import { AuthenticatedUser } from './types/authenticated-user.type';
 
@@ -44,5 +51,26 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.id);
+  }
+
+  @ApiBearerAuth()
+  @Patch('me')
+  @ApiOperation({ summary: 'Update current authenticated user profile' })
+  updateMe(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateMeDto) {
+    return this.authService.updateMe(user.id, body.name);
+  }
+
+  @ApiBearerAuth()
+  @Patch('change-password')
+  @ApiOperation({ summary: 'Change current authenticated user password' })
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      user.id,
+      body.oldPassword,
+      body.newPassword,
+    );
   }
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -164,6 +165,70 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async updateMe(userId: string, name: string): Promise<AuthUserResponse> {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('Name cannot be empty');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!existingUser) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name: normalizedName },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, passwordHash: true },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isOldPasswordValid = await bcrypt.compare(
+      oldPassword,
+      user.passwordHash,
+    );
+    if (!isOldPasswordValid) {
+      throw new UnauthorizedException('Invalid old password');
+    }
+
+    const isNewPasswordSame = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isNewPasswordSame) {
+      throw new BadRequestException(
+        'New password must be different from old password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { success: true };
   }
 
   private async issueTokenPair(user: Pick<User, 'id' | 'email'>) {

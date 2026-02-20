@@ -39,3 +39,22 @@ export class LogoutDto {
   @IsString()
   refreshToken!: string;
 }
+
+export class UpdateMeDto {
+  @ApiProperty({ example: 'Alice Johnson' })
+  @IsString()
+  @MinLength(1)
+  name!: string;
+}
+
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'strongpassword123' })
+  @IsString()
+  @MinLength(8)
+  oldPassword!: string;
+
+  @ApiProperty({ example: 'newstrongpassword123' })
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
+}
