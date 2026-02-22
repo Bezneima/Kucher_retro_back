@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
-import { AddTeamMemberDto, CreateTeamDto, UpdateTeamMemberRoleDto } from './dto/team.dto';
+import { AddTeamMemberDto, CreateTeamDto, UpdateTeamDto, UpdateTeamMemberRoleDto } from './dto/team.dto';
 import { TeamService } from './team.service';
 
 @ApiTags('teams')
@@ -28,6 +28,34 @@ export class TeamController {
   @ApiOperation({ summary: 'Get teams where current user is a member' })
   getTeams(@CurrentUser() user: AuthenticatedUser) {
     return this.teamService.getTeams(user.id);
+  }
+
+  @Patch(':teamId')
+  @ApiOperation({ summary: 'Update team name (OWNER/ADMIN only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        name: 'Core Platform Team',
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Team updated',
+    schema: {
+      example: {
+        id: 1,
+        name: 'Core Platform Team',
+        createdAt: '2026-02-20T12:00:00.000Z',
+        updatedAt: '2026-02-20T12:30:00.000Z',
+      },
+    },
+  })
+  updateTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Body() body: UpdateTeamDto,
+  ) {
+    return this.teamService.updateTeam(teamId, user.id, body);
   }
 
   @Get(':teamId/members')
@@ -65,6 +93,15 @@ export class TeamController {
     @Param('userId') memberUserId: string,
   ) {
     return this.teamService.removeMember(teamId, user.id, memberUserId);
+  }
+
+  @Delete(':teamId/leave')
+  @ApiOperation({ summary: 'Leave team where current user is a member' })
+  leaveTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId', ParseIntPipe) teamId: number,
+  ) {
+    return this.teamService.leaveTeam(teamId, user.id);
   }
 
   @Patch(':teamId/members/:userId/role')

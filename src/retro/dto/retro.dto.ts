@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsDateString, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsHexColor,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class CreateBoardDto {
   @ApiProperty({ example: 1 })
@@ -40,10 +49,32 @@ export class UpdateColumnNameDto {
   name!: string;
 }
 
+export class ColumnColorDto {
+  @ApiProperty({ example: '#FFDBD7' })
+  @IsHexColor()
+  columnColor!: string;
+
+  @ApiProperty({ example: '#FF6161' })
+  @IsHexColor()
+  itemColor!: string;
+
+  @ApiProperty({ example: '#FF9594' })
+  @IsHexColor()
+  buttonColor!: string;
+}
+
 export class UpdateColumnColorDto {
-  @ApiProperty({ example: '#34d399' })
-  @IsString()
-  color!: string;
+  @ApiProperty({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
+  @ValidateNested()
+  @Type(() => ColumnColorDto)
+  color!: ColumnColorDto;
 }
 
 export class UpdateColumnDescriptionDto {
@@ -63,10 +94,18 @@ export class CreateColumnDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: '#60a5fa' })
+  @ApiPropertyOptional({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
   @IsOptional()
-  @IsString()
-  color?: string;
+  @ValidateNested()
+  @Type(() => ColumnColorDto)
+  color?: ColumnColorDto;
 }
 
 export class CreateItemDto {
@@ -131,4 +170,74 @@ export class SyncItemPositionsDto {
   @ValidateNested({ each: true })
   @Type(() => ItemPositionChangeDto)
   changes!: ItemPositionChangeDto[];
+}
+
+export class RetroItemResponseDto {
+  @ApiProperty({ example: 42 })
+  id!: number;
+
+  @ApiProperty({ example: 'Нужно улучшить code review процесс' })
+  description!: string;
+
+  @ApiProperty({ example: '2026-02-22T12:00:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ type: [String], example: ['user-id-1'] })
+  likes!: string[];
+
+  @ApiPropertyOptional({ example: '#34d399' })
+  color?: string;
+
+  @ApiProperty({ example: 1 })
+  columnIndex!: number;
+
+  @ApiProperty({ example: 0 })
+  rowIndex!: number;
+}
+
+export class RetroColumnResponseDto {
+  @ApiProperty({ example: 7 })
+  id!: number;
+
+  @ApiProperty({ example: 'Что было хорошо?' })
+  name!: string;
+
+  @ApiProperty({ example: 'Подсказка для участников по заполнению колонки' })
+  description!: string;
+
+  @ApiProperty({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
+  color!: ColumnColorDto;
+
+  @ApiProperty({ example: false })
+  isNameEditing!: boolean;
+
+  @ApiProperty({ type: [RetroItemResponseDto] })
+  items!: RetroItemResponseDto[];
+}
+
+export class RetroBoardResponseDto {
+  @ApiProperty({ example: 1 })
+  id!: number;
+
+  @ApiProperty({ example: 1 })
+  teamId!: number;
+
+  @ApiProperty({ example: 'Sprint 12 Retro' })
+  name!: string;
+
+  @ApiProperty({ example: '2026-02-16' })
+  date!: string;
+
+  @ApiProperty({ example: 'Командная ретроспектива по спринту' })
+  description!: string;
+
+  @ApiProperty({ type: [RetroColumnResponseDto] })
+  columns!: RetroColumnResponseDto[];
 }

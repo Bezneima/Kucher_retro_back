@@ -86,7 +86,7 @@ model RetroColumn {
   id         Int         @id @default(autoincrement())
   name       String
   description String     @default("")
-  color      String
+  color      Json
   orderIndex Int
   boardId    Int
   board      RetroBoard  @relation(fields: [boardId], references: [id], onDelete: Cascade)

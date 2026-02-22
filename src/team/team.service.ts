@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { TeamRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AddTeamMemberDto, CreateTeamDto } from './dto/team.dto';
+import { AddTeamMemberDto, CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
 
 @Injectable()
 export class TeamService {
@@ -75,6 +75,28 @@ export class TeamService {
       createdAt: membership.team.createdAt,
       updatedAt: membership.team.updatedAt,
     }));
+  }
+
+  async updateTeam(teamId: number, actorUserId: string, dto: UpdateTeamDto) {
+    await this.ensureTeamAdminOrOwner(teamId, actorUserId);
+
+    const name = dto.name.trim();
+    if (!name) {
+      throw new BadRequestException('Team name is required');
+    }
+
+    const team = await this.prisma.team.update({
+      where: { id: teamId },
+      data: { name },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return team;
   }
 
   async getMembers(teamId: number, userId: string) {
@@ -180,6 +202,40 @@ export class TeamService {
     });
 
     return { deleted: true };
+  }
+
+  async leaveTeam(teamId: number, userId: string) {
+    const member = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId,
+          userId,
+        },
+      },
+      select: { id: true, role: true },
+    });
+
+    if (!member) {
+      throw new NotFoundException(`Team ${teamId} not found`);
+    }
+
+    if (member.role === TeamRole.OWNER) {
+      const membersCount = await this.prisma.teamMember.count({
+        where: { teamId },
+      });
+
+      if (membersCount > 1) {
+        throw new ConflictException(
+          'OWNER can leave team only when they are the only member',
+        );
+      }
+    }
+
+    await this.prisma.teamMember.delete({
+      where: { id: member.id },
+    });
+
+    return { left: true };
   }
 
   async updateMemberRole(

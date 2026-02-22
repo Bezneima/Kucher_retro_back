@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
@@ -8,6 +8,9 @@ import {
   CreateBoardDto,
   GetBoardsQueryDto,
   ReorderColumnsDto,
+  RetroBoardResponseDto,
+  RetroColumnResponseDto,
+  RetroItemResponseDto,
   SyncItemPositionsDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
@@ -47,12 +50,14 @@ export class RetroController {
     description: 'Filter boards by team id',
     schema: { type: 'integer', minimum: 1 },
   })
+  @ApiOkResponse({ type: [RetroBoardResponseDto] })
   getBoards(@CurrentUser() user: AuthenticatedUser, @Query() query: GetBoardsQueryDto) {
     return this.retroService.getBoards(user.id, query.teamId);
   }
 
   @Get('boards/:boardId/columns')
   @ApiOperation({ summary: 'Get board columns' })
+  @ApiOkResponse({ type: [RetroColumnResponseDto] })
   getBoardColumns(
     @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
@@ -66,7 +71,11 @@ export class RetroController {
     schema: {
       example: {
         name: 'Новая колонка',
-        color: '#60a5fa',
+        color: {
+          columnColor: '#FFDBD7',
+          itemColor: '#FF6161',
+          buttonColor: '#FF9594',
+        },
       },
     },
   })
@@ -93,6 +102,7 @@ export class RetroController {
       },
     },
   })
+  @ApiOkResponse({ type: RetroItemResponseDto })
   addItemToColumn(
     @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
@@ -123,7 +133,11 @@ export class RetroController {
   @ApiBody({
     schema: {
       example: {
-        color: '#34d399',
+        color: {
+          columnColor: '#FFDBD7',
+          itemColor: '#FF6161',
+          buttonColor: '#FF9594',
+        },
       },
     },
   })

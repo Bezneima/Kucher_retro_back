@@ -14,6 +14,13 @@ export class CreateTeamDto {
   name!: string;
 }
 
+export class UpdateTeamDto {
+  @ApiProperty({ example: 'Core Platform Team' })
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+}
+
 export class AddTeamMemberDto {
   @ApiProperty({ example: 'alice@example.com' })
   @IsEmail()

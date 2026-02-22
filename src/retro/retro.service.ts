@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, TeamRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateBoardDto, ItemPositionChangeDto } from './dto/retro.dto';
+import { ColumnColorDto, CreateBoardDto, ItemPositionChangeDto } from './dto/retro.dto';
 
 const BOARD_INCLUDE = {
   columns: {
@@ -22,6 +22,30 @@ const BOARD_INCLUDE = {
 type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
   include: typeof BOARD_INCLUDE;
 }>;
+
+type ColumnColors = {
+  columnColor: string;
+  itemColor: string;
+  buttonColor: string;
+};
+
+const DEFAULT_COLUMN_COLORS: [ColumnColors, ColumnColors, ColumnColors] = [
+  {
+    columnColor: '#FFDBD7',
+    itemColor: '#FF6161',
+    buttonColor: '#FF9594',
+  },
+  {
+    columnColor: '#B4DFC4',
+    itemColor: '#7FBF7F',
+    buttonColor: '#96CD9D',
+  },
+  {
+    columnColor: '#D7CEF9',
+    itemColor: '#AB99ED',
+    buttonColor: '#C1B3F3',
+  },
+];
 
 @Injectable()
 export class RetroService {
@@ -40,17 +64,17 @@ export class RetroService {
           create: [
             {
               name: 'Что было хорошо?',
-              color: '#34d399',
+              color: DEFAULT_COLUMN_COLORS[0] satisfies Prisma.InputJsonValue,
               orderIndex: 0,
             },
             {
               name: 'Что могло быть лучше?',
-              color: '#f87171',
+              color: DEFAULT_COLUMN_COLORS[1] satisfies Prisma.InputJsonValue,
               orderIndex: 1,
             },
             {
               name: 'Actions points',
-              color: '#c084fc',
+              color: DEFAULT_COLUMN_COLORS[2] satisfies Prisma.InputJsonValue,
               orderIndex: 2,
             },
           ],
@@ -93,7 +117,7 @@ export class RetroService {
     userId: string,
     name?: string,
     description?: string,
-    color?: string,
+    color?: ColumnColorDto,
   ) {
     await this.ensureBoardAccessible(boardId, userId);
 
@@ -110,7 +134,7 @@ export class RetroService {
         boardId,
         name: name ?? 'Новая колонка',
         description: description ?? '',
-        color: color ?? '#60a5fa',
+        color: this.toColumnColorsInput(color ?? DEFAULT_COLUMN_COLORS[0]),
         orderIndex: lastColumn ? lastColumn.orderIndex + 1 : 0,
       },
     });
@@ -174,11 +198,11 @@ export class RetroService {
     });
   }
 
-  async updateColumnColor(columnId: number, userId: string, color: string) {
+  async updateColumnColor(columnId: number, userId: string, color: ColumnColorDto) {
     await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
-      data: { color },
+      data: { color: this.toColumnColorsInput(color) },
     });
   }
 
@@ -511,17 +535,52 @@ export class RetroService {
         id: column.id,
         name: column.name,
         description: column.description,
-        color: column.color,
+        color: this.toColumnColors(column.color),
         isNameEditing: false,
         items: column.items.map((item) => ({
           id: item.id,
           description: item.description,
+          createdAt: item.createdAt,
           likes: item.likes,
           color: item.color ?? undefined,
           columnIndex: column.orderIndex,
           rowIndex: item.rowIndex,
         })),
       })),
+    };
+  }
+
+  private toColumnColors(color: Prisma.JsonValue): ColumnColors {
+    if (typeof color === 'object' && color !== null && !Array.isArray(color)) {
+      const value = color as Record<string, unknown>;
+      const columnColor = value.columnColor;
+      const itemColor = value.itemColor;
+      const buttonColor = value.buttonColor;
+      if (
+        typeof columnColor === 'string' &&
+        typeof itemColor === 'string' &&
+        typeof buttonColor === 'string'
+      ) {
+        return { columnColor, itemColor, buttonColor };
+      }
+    }
+
+    if (typeof color === 'string') {
+      return {
+        columnColor: color,
+        itemColor: color,
+        buttonColor: color,
+      };
+    }
+
+    return DEFAULT_COLUMN_COLORS[0];
+  }
+
+  private toColumnColorsInput(color: ColumnColors): Prisma.InputJsonObject {
+    return {
+      columnColor: color.columnColor,
+      itemColor: color.itemColor,
+      buttonColor: color.buttonColor,
     };
   }
 }
