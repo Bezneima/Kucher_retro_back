@@ -14,6 +14,7 @@ import {
   RetroColumnResponseDto,
   RetroItemResponseDto,
   SyncItemPositionsDto,
+  UpdateBoardNameDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
@@ -66,6 +67,24 @@ export class RetroController {
     @Param('boardId', ParseIntPipe) boardId: number,
   ) {
     return this.retroService.getBoardColumns(boardId, user.id);
+  }
+
+  @Patch('boards/:boardId/name')
+  @ApiOperation({ summary: 'Rename board (OWNER/ADMIN only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        name: 'Sprint 13 Retro',
+      },
+    },
+  })
+  @ApiOkResponse({ type: RetroBoardResponseDto })
+  updateBoardName(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId', ParseIntPipe) boardId: number,
+    @Body() body: UpdateBoardNameDto,
+  ) {
+    return this.retroService.updateBoardName(boardId, user.id, body.name);
   }
 
   @Post('boards/:boardId/columns')

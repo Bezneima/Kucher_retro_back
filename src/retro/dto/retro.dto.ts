@@ -44,6 +44,13 @@ export class GetBoardsQueryDto {
   teamId?: number;
 }
 
+export class UpdateBoardNameDto {
+  @ApiProperty({ example: 'Sprint 13 Retro' })
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+}
+
 export class UpdateColumnNameDto {
   @ApiProperty({ example: 'Что было хорошо?' })
   @IsString()

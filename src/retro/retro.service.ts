@@ -131,6 +131,18 @@ export class RetroService {
     return this.mapBoard(board).columns;
   }
 
+  async updateBoardName(boardId: number, userId: string, name: string) {
+    await this.ensureBoardAdminOrOwner(boardId, userId);
+
+    const board = await this.prisma.retroBoard.update({
+      where: { id: boardId },
+      data: { name },
+      include: BOARD_INCLUDE,
+    });
+
+    return this.mapBoard(board);
+  }
+
   async createColumn(
     boardId: number,
     userId: string,
@@ -548,6 +560,35 @@ export class RetroService {
 
     if (!board) {
       throw new NotFoundException(`Board ${boardId} not found`);
+    }
+  }
+
+  private async ensureBoardAdminOrOwner(boardId: number, userId: string) {
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
+      select: { teamId: true },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: board.teamId,
+          userId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!teamMember) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    if (teamMember.role === TeamRole.MEMBER) {
+      throw new ForbiddenException('Insufficient permissions to rename board');
     }
   }
 
