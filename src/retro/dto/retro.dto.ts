@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsHexColor,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Min,
@@ -128,6 +129,20 @@ export class UpdateItemColorDto {
   color?: string;
 }
 
+export class CreateItemCommentDto {
+  @ApiProperty({ example: 'Согласен, это нужно поправить в следующем спринте' })
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+}
+
+export class UpdateItemCommentDto {
+  @ApiProperty({ example: 'Обновил формулировку после обсуждения' })
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+}
+
 export class ReorderColumnsDto {
   @ApiProperty({ example: 0 })
   @Type(() => Number)
@@ -193,6 +208,37 @@ export class RetroItemResponseDto {
 
   @ApiProperty({ example: 0 })
   rowIndex!: number;
+
+  @ApiProperty({ example: 3 })
+  commentsCount!: number;
+}
+
+export class CommentCreatorDto {
+  @ApiProperty({ example: '8f635db5-7d93-4e6e-a1a7-8f7ba4f4f7d2' })
+  id!: string;
+
+  @ApiProperty({ example: 'alice@example.com' })
+  email!: string;
+
+  @ApiPropertyOptional({ example: 'Alice' })
+  name?: string | null;
+}
+
+export class RetroItemCommentResponseDto {
+  @ApiProperty({ example: 15 })
+  id!: number;
+
+  @ApiProperty({ example: 42 })
+  itemId!: number;
+
+  @ApiProperty({ example: 'Согласен, это нужно поправить в следующем спринте' })
+  text!: string;
+
+  @ApiProperty({ example: '2026-02-22T12:00:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ type: CommentCreatorDto })
+  creator!: CommentCreatorDto;
 }
 
 export class RetroColumnResponseDto {

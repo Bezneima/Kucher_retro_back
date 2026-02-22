@@ -4,17 +4,20 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   CreateColumnDto,
-  CreateItemDto,
   CreateBoardDto,
+  CreateItemCommentDto,
+  CreateItemDto,
   GetBoardsQueryDto,
   ReorderColumnsDto,
   RetroBoardResponseDto,
+  RetroItemCommentResponseDto,
   RetroColumnResponseDto,
   RetroItemResponseDto,
   SyncItemPositionsDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
+  UpdateItemCommentDto,
   UpdateItemColorDto,
   UpdateItemDescriptionDto,
 } from './dto/retro.dto';
@@ -209,6 +212,52 @@ export class RetroController {
     return this.retroService.updateItemColor(itemId, user.id, body.color);
   }
 
+  @Get('items/:itemId/comments')
+  @ApiOperation({ summary: 'Get all comments for item (oldest first)' })
+  @ApiOkResponse({ type: [RetroItemCommentResponseDto] })
+  getItemComments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    return this.retroService.getItemComments(itemId, user.id);
+  }
+
+  @Post('items/:itemId/comments')
+  @ApiOperation({ summary: 'Create comment for item' })
+  @ApiBody({
+    schema: {
+      example: {
+        text: 'Согласен, это нужно поправить в следующем спринте',
+      },
+    },
+  })
+  @ApiOkResponse({ type: RetroItemCommentResponseDto })
+  createItemComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Body() body: CreateItemCommentDto,
+  ) {
+    return this.retroService.createItemComment(itemId, user.id, body.text);
+  }
+
+  @Patch('comments/:commentId')
+  @ApiOperation({ summary: 'Update item comment (author or ADMIN/OWNER only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        text: 'Обновил формулировку после обсуждения',
+      },
+    },
+  })
+  @ApiOkResponse({ type: RetroItemCommentResponseDto })
+  updateItemComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Body() body: UpdateItemCommentDto,
+  ) {
+    return this.retroService.updateItemComment(commentId, user.id, body.text);
+  }
+
   @Patch('boards/:boardId/columns/reorder')
   @ApiOperation({ summary: 'Reorder board columns by indexes' })
   @ApiBody({
@@ -257,5 +306,14 @@ export class RetroController {
   @ApiOperation({ summary: 'Delete item' })
   deleteItem(@CurrentUser() user: AuthenticatedUser, @Param('itemId', ParseIntPipe) itemId: number) {
     return this.retroService.deleteItem(itemId, user.id);
+  }
+
+  @Delete('comments/:commentId')
+  @ApiOperation({ summary: 'Delete item comment (author or ADMIN/OWNER only)' })
+  deleteItemComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('commentId', ParseIntPipe) commentId: number,
+  ) {
+    return this.retroService.deleteItemComment(commentId, user.id);
   }
 }

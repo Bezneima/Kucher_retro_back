@@ -14,6 +14,11 @@ const BOARD_INCLUDE = {
     include: {
       items: {
         orderBy: { rowIndex: 'asc' },
+        include: {
+          _count: {
+            select: { comments: true },
+          },
+        },
       },
     },
   },
@@ -21,6 +26,20 @@ const BOARD_INCLUDE = {
 
 type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
   include: typeof BOARD_INCLUDE;
+}>;
+
+const COMMENT_INCLUDE = {
+  creator: {
+    select: {
+      id: true,
+      email: true,
+      name: true,
+    },
+  },
+} satisfies Prisma.RetroItemCommentInclude;
+
+type RetroItemCommentWithCreator = Prisma.RetroItemCommentGetPayload<{
+  include: typeof COMMENT_INCLUDE;
 }>;
 
 type ColumnColors = {
@@ -187,6 +206,7 @@ export class RetroService {
     return {
       ...createdItem,
       columnIndex: column.orderIndex,
+      commentsCount: 0,
     };
   }
 
@@ -263,6 +283,55 @@ export class RetroService {
       where: { id: itemId },
       data: { color: color ?? null },
     });
+  }
+
+  async getItemComments(itemId: number, userId: string) {
+    await this.ensureItemAccessible(itemId, userId);
+
+    const comments = await this.prisma.retroItemComment.findMany({
+      where: { itemId },
+      include: COMMENT_INCLUDE,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return comments.map((comment) => this.mapComment(comment));
+  }
+
+  async createItemComment(itemId: number, userId: string, text: string) {
+    await this.ensureItemAccessible(itemId, userId);
+
+    const comment = await this.prisma.retroItemComment.create({
+      data: {
+        itemId,
+        creatorId: userId,
+        text,
+      },
+      include: COMMENT_INCLUDE,
+    });
+
+    return this.mapComment(comment);
+  }
+
+  async updateItemComment(commentId: number, userId: string, text: string) {
+    await this.ensureCommentManageAccess(commentId, userId);
+
+    const comment = await this.prisma.retroItemComment.update({
+      where: { id: commentId },
+      data: { text },
+      include: COMMENT_INCLUDE,
+    });
+
+    return this.mapComment(comment);
+  }
+
+  async deleteItemComment(commentId: number, userId: string) {
+    await this.ensureCommentManageAccess(commentId, userId);
+
+    await this.prisma.retroItemComment.delete({
+      where: { id: commentId },
+    });
+
+    return { deleted: true };
   }
 
   async reorderColumns(boardId: number, userId: string, oldIndex: number, newIndex: number) {
@@ -524,6 +593,64 @@ export class RetroService {
     }
   }
 
+  private async ensureCommentManageAccess(commentId: number, userId: string) {
+    const comment = await this.prisma.retroItemComment.findFirst({
+      where: {
+        id: commentId,
+        item: {
+          column: {
+            board: {
+              team: {
+                members: {
+                  some: { userId },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        creatorId: true,
+        item: {
+          select: {
+            column: {
+              select: {
+                board: {
+                  select: {
+                    teamId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!comment) {
+      throw new NotFoundException(`Comment ${commentId} not found`);
+    }
+
+    if (comment.creatorId === userId) {
+      return;
+    }
+
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: comment.item.column.board.teamId,
+          userId,
+        },
+      },
+      select: { role: true },
+    });
+
+    if (!teamMember || teamMember.role === TeamRole.MEMBER) {
+      throw new ForbiddenException('Insufficient permissions to manage comment');
+    }
+  }
+
   private mapBoard(board: RetroBoardWithColumns) {
     return {
       id: board.id,
@@ -545,8 +672,23 @@ export class RetroService {
           color: item.color ?? undefined,
           columnIndex: column.orderIndex,
           rowIndex: item.rowIndex,
+          commentsCount: item._count.comments,
         })),
       })),
+    };
+  }
+
+  private mapComment(comment: RetroItemCommentWithCreator) {
+    return {
+      id: comment.id,
+      itemId: comment.itemId,
+      text: comment.text,
+      createdAt: comment.createdAt,
+      creator: {
+        id: comment.creator.id,
+        email: comment.creator.email,
+        name: comment.creator.name,
+      },
     };
   }
 
