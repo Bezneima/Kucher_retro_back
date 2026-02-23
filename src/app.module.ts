@@ -7,9 +7,10 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { RetroModule } from './retro/retro.module';
 import { TeamModule } from './team/team.module';
+import { TeamInviteModule } from './team-invite/team-invite.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RetroModule, TeamModule],
+  imports: [PrismaModule, AuthModule, RetroModule, TeamModule, TeamInviteModule],
   controllers: [AppController],
   providers: [
     AppService,
