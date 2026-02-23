@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { Prisma, TeamRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { ColumnColorDto, CreateBoardDto, ItemPositionChangeDto } from './dto/retro.dto';
+import {
+  ColumnColorDto,
+  CreateBoardDto,
+  ItemPositionChangeDto,
+} from './dto/retro.dto';
 
 const BOARD_INCLUDE = {
   columns: {
@@ -27,6 +31,8 @@ const BOARD_INCLUDE = {
 type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
   include: typeof BOARD_INCLUDE;
 }>;
+type RetroBoardColumn = RetroBoardWithColumns['columns'][number];
+type RetroBoardItem = RetroBoardColumn['items'][number];
 
 const COMMENT_INCLUDE = {
   creator: {
@@ -123,7 +129,7 @@ export class RetroService {
       orderBy: { id: 'asc' },
     });
 
-    return boards.map((board) => this.mapBoard(board));
+    return boards.map((board: RetroBoardWithColumns) => this.mapBoard(board));
   }
 
   async getBoardColumns(boardId: number, userId: string) {
@@ -180,7 +186,11 @@ export class RetroService {
     };
   }
 
-  async addItemToColumn(columnId: number, userId: string, description?: string) {
+  async addItemToColumn(
+    columnId: number,
+    userId: string,
+    description?: string,
+  ) {
     const column = await this.prisma.retroColumn.findFirst({
       where: {
         id: columnId,
@@ -230,7 +240,11 @@ export class RetroService {
     });
   }
 
-  async updateColumnColor(columnId: number, userId: string, color: ColumnColorDto) {
+  async updateColumnColor(
+    columnId: number,
+    userId: string,
+    color: ColumnColorDto,
+  ) {
     await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
@@ -238,7 +252,11 @@ export class RetroService {
     });
   }
 
-  async updateColumnDescription(columnId: number, userId: string, description: string) {
+  async updateColumnDescription(
+    columnId: number,
+    userId: string,
+    description: string,
+  ) {
     await this.ensureColumnAccessible(columnId, userId);
     return this.prisma.retroColumn.update({
       where: { id: columnId },
@@ -246,7 +264,11 @@ export class RetroService {
     });
   }
 
-  async updateItemDescription(itemId: number, userId: string, description: string) {
+  async updateItemDescription(
+    itemId: number,
+    userId: string,
+    description: string,
+  ) {
     await this.ensureItemAccessible(itemId, userId);
     return this.prisma.retroItem.update({
       where: { id: itemId },
@@ -306,7 +328,9 @@ export class RetroService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return comments.map((comment) => this.mapComment(comment));
+    return comments.map((comment: RetroItemCommentWithCreator) =>
+      this.mapComment(comment),
+    );
   }
 
   async createItemComment(itemId: number, userId: string, text: string) {
@@ -346,7 +370,12 @@ export class RetroService {
     return { deleted: true };
   }
 
-  async reorderColumns(boardId: number, userId: string, oldIndex: number, newIndex: number) {
+  async reorderColumns(
+    boardId: number,
+    userId: string,
+    oldIndex: number,
+    newIndex: number,
+  ) {
     await this.ensureBoardAccessible(boardId, userId);
 
     const columns = await this.prisma.retroColumn.findMany({
@@ -386,7 +415,11 @@ export class RetroService {
     return this.getBoardColumns(boardId, userId);
   }
 
-  async syncItemPositions(boardId: number, userId: string, changes: ItemPositionChangeDto[]) {
+  async syncItemPositions(
+    boardId: number,
+    userId: string,
+    changes: ItemPositionChangeDto[],
+  ) {
     if (changes.length === 0) {
       return { updated: 0 };
     }
@@ -404,15 +437,21 @@ export class RetroService {
       throw new NotFoundException(`Board ${boardId} has no columns`);
     }
 
-    const allowedColumnIds = new Set(columns.map((column) => column.id));
+    const allowedColumnIds = new Set(
+      columns.map((column: { id: number }) => column.id),
+    );
 
     for (const change of changes) {
       if (!allowedColumnIds.has(change.newColumnId)) {
-        throw new BadRequestException(`Column id ${change.newColumnId} not found`);
+        throw new BadRequestException(
+          `Column id ${change.newColumnId} not found`,
+        );
       }
     }
 
-    const uniqueItemIds = Array.from(new Set(changes.map((change) => change.itemId)));
+    const uniqueItemIds = Array.from(
+      new Set(changes.map((change) => change.itemId)),
+    );
 
     const items = await this.prisma.retroItem.findMany({
       where: {
@@ -688,7 +727,9 @@ export class RetroService {
     });
 
     if (!teamMember || teamMember.role === TeamRole.MEMBER) {
-      throw new ForbiddenException('Insufficient permissions to manage comment');
+      throw new ForbiddenException(
+        'Insufficient permissions to manage comment',
+      );
     }
   }
 
@@ -699,13 +740,13 @@ export class RetroService {
       name: board.name,
       date: board.date.toISOString().slice(0, 10),
       description: board.description,
-      columns: board.columns.map((column) => ({
+      columns: board.columns.map((column: RetroBoardColumn) => ({
         id: column.id,
         name: column.name,
         description: column.description,
         color: this.toColumnColors(column.color),
         isNameEditing: false,
-        items: column.items.map((item) => ({
+        items: column.items.map((item: RetroBoardItem) => ({
           id: item.id,
           description: item.description,
           createdAt: item.createdAt,

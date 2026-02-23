@@ -5,9 +5,37 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TeamRole } from '@prisma/client';
+import { Prisma, TeamRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddTeamMemberDto, CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
+
+type TeamMembershipWithTeam = Prisma.TeamMemberGetPayload<{
+  select: {
+    role: true;
+    team: {
+      select: {
+        id: true;
+        name: true;
+        createdAt: true;
+        updatedAt: true;
+      };
+    };
+  };
+}>;
+
+type TeamMemberWithUser = Prisma.TeamMemberGetPayload<{
+  select: {
+    userId: true;
+    role: true;
+    createdAt: true;
+    user: {
+      select: {
+        email: true;
+        name: true;
+      };
+    };
+  };
+}>;
 
 @Injectable()
 export class TeamService {
@@ -68,7 +96,7 @@ export class TeamService {
       },
     });
 
-    return memberships.map((membership) => ({
+    return memberships.map((membership: TeamMembershipWithTeam) => ({
       id: membership.team.id,
       name: membership.team.name,
       role: membership.role,
@@ -118,7 +146,7 @@ export class TeamService {
       orderBy: [{ role: 'asc' }, { id: 'asc' }],
     });
 
-    return members.map((member) => ({
+    return members.map((member: TeamMemberWithUser) => ({
       userId: member.userId,
       email: member.user.email,
       name: member.user.name,
@@ -172,11 +200,17 @@ export class TeamService {
     };
   }
 
-  async removeMember(teamId: number, actorUserId: string, memberUserId: string) {
+  async removeMember(
+    teamId: number,
+    actorUserId: string,
+    memberUserId: string,
+  ) {
     await this.ensureTeamAdminOrOwner(teamId, actorUserId);
 
     if (actorUserId === memberUserId) {
-      throw new BadRequestException('Use a dedicated leave-team flow to remove yourself');
+      throw new BadRequestException(
+        'Use a dedicated leave-team flow to remove yourself',
+      );
     }
 
     const targetMember = await this.prisma.teamMember.findUnique({
@@ -190,7 +224,9 @@ export class TeamService {
     });
 
     if (!targetMember) {
-      throw new NotFoundException(`Member ${memberUserId} not found in team ${teamId}`);
+      throw new NotFoundException(
+        `Member ${memberUserId} not found in team ${teamId}`,
+      );
     }
 
     if (targetMember.role === TeamRole.OWNER) {
@@ -257,15 +293,24 @@ export class TeamService {
           userId: memberUserId,
         },
       },
-      select: { id: true, role: true, userId: true, user: { select: { email: true, name: true } } },
+      select: {
+        id: true,
+        role: true,
+        userId: true,
+        user: { select: { email: true, name: true } },
+      },
     });
 
     if (!targetMember) {
-      throw new NotFoundException(`Member ${memberUserId} not found in team ${teamId}`);
+      throw new NotFoundException(
+        `Member ${memberUserId} not found in team ${teamId}`,
+      );
     }
 
     if (targetMember.role === TeamRole.OWNER) {
-      throw new ConflictException('Changing OWNER role is not supported in MVP');
+      throw new ConflictException(
+        'Changing OWNER role is not supported in MVP',
+      );
     }
 
     const updatedMember = await this.prisma.teamMember.update({
@@ -325,7 +370,9 @@ export class TeamService {
     }
 
     if (member.role === TeamRole.MEMBER) {
-      throw new ForbiddenException('Insufficient permissions to manage team members');
+      throw new ForbiddenException(
+        'Insufficient permissions to manage team members',
+      );
     }
   }
 
