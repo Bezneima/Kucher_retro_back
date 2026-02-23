@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { SignOptions } from 'jsonwebtoken';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash } from 'crypto';
@@ -30,14 +31,18 @@ type AuthWithTokensResponse = {
   refreshToken: string;
 };
 
+type JwtExpiresIn = NonNullable<SignOptions['expiresIn']>;
+
 const PASSWORD_SALT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
   private readonly accessSecret = getRequiredEnv('JWT_ACCESS_SECRET');
-  private readonly accessExpiresIn = getRequiredEnv('JWT_ACCESS_EXPIRES_IN');
+  private readonly accessExpiresIn = getJwtExpiresInEnv('JWT_ACCESS_EXPIRES_IN');
   private readonly refreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
-  private readonly refreshExpiresIn = getRequiredEnv('JWT_REFRESH_EXPIRES_IN');
+  private readonly refreshExpiresIn = getJwtExpiresInEnv(
+    'JWT_REFRESH_EXPIRES_IN',
+  );
 
   constructor(
     private readonly prisma: PrismaService,
@@ -307,4 +312,13 @@ function getRequiredEnv(name: string): string {
   }
 
   return value;
+}
+
+function getJwtExpiresInEnv(name: string): JwtExpiresIn {
+  const value = getRequiredEnv(name).trim();
+  if (/^\d+$/.test(value)) {
+    return Number(value);
+  }
+
+  return value as JwtExpiresIn;
 }
