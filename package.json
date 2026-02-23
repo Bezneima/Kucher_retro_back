@@ -5,6 +5,7 @@
   "description": "Starter template: NestJS + Prisma + PostgreSQL + Docker + Swagger",
   "license": "UNLICENSED",
   "scripts": {
+    "prebuild": "prisma generate",
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "nest start",
