@@ -13,6 +13,11 @@ import {
 } from './dto/retro.dto';
 
 const BOARD_INCLUDE = {
+  team: {
+    select: {
+      isAllCardsHidden: true,
+    },
+  },
   columns: {
     orderBy: { orderIndex: 'asc' },
     include: {
@@ -202,7 +207,19 @@ export class RetroService {
           },
         },
       },
-      select: { id: true, orderIndex: true },
+      select: {
+        id: true,
+        orderIndex: true,
+        board: {
+          select: {
+            team: {
+              select: {
+                isAllCardsHidden: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!column) {
@@ -227,6 +244,10 @@ export class RetroService {
 
     return {
       ...createdItem,
+      description: this.maskItemDescription(
+        createdItem.description,
+        column.board.team.isAllCardsHidden,
+      ),
       columnIndex: column.orderIndex,
       commentsCount: 0,
     };
@@ -270,10 +291,21 @@ export class RetroService {
     description: string,
   ) {
     await this.ensureItemAccessible(itemId, userId);
-    return this.prisma.retroItem.update({
+
+    const isAllCardsHidden = await this.getIsAllCardsHiddenByItemId(itemId);
+
+    const updatedItem = await this.prisma.retroItem.update({
       where: { id: itemId },
       data: { description },
     });
+
+    return {
+      ...updatedItem,
+      description: this.maskItemDescription(
+        updatedItem.description,
+        isAllCardsHidden,
+      ),
+    };
   }
 
   async toggleItemLike(itemId: number, userId: string) {
@@ -290,7 +322,22 @@ export class RetroService {
           },
         },
       },
-      select: { likes: true },
+      select: {
+        likes: true,
+        column: {
+          select: {
+            board: {
+              select: {
+                team: {
+                  select: {
+                    isAllCardsHidden: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!item) {
@@ -305,18 +352,37 @@ export class RetroService {
       likes.splice(index, 1);
     }
 
-    return this.prisma.retroItem.update({
+    const updatedItem = await this.prisma.retroItem.update({
       where: { id: itemId },
       data: { likes },
     });
+
+    return {
+      ...updatedItem,
+      description: this.maskItemDescription(
+        updatedItem.description,
+        item.column.board.team.isAllCardsHidden,
+      ),
+    };
   }
 
   async updateItemColor(itemId: number, userId: string, color?: string) {
     await this.ensureItemAccessible(itemId, userId);
-    return this.prisma.retroItem.update({
+
+    const isAllCardsHidden = await this.getIsAllCardsHiddenByItemId(itemId);
+
+    const updatedItem = await this.prisma.retroItem.update({
       where: { id: itemId },
       data: { color: color ?? null },
     });
+
+    return {
+      ...updatedItem,
+      description: this.maskItemDescription(
+        updatedItem.description,
+        isAllCardsHidden,
+      ),
+    };
   }
 
   async getItemComments(itemId: number, userId: string) {
@@ -737,6 +803,7 @@ export class RetroService {
     return {
       id: board.id,
       teamId: board.teamId,
+      isAllCardsHidden: board.team.isAllCardsHidden,
       name: board.name,
       date: board.date.toISOString().slice(0, 10),
       description: board.description,
@@ -748,7 +815,10 @@ export class RetroService {
         isNameEditing: false,
         items: column.items.map((item: RetroBoardItem) => ({
           id: item.id,
-          description: item.description,
+          description: this.maskItemDescription(
+            item.description,
+            board.team.isAllCardsHidden,
+          ),
           createdAt: item.createdAt,
           likes: item.likes,
           color: item.color ?? undefined,
@@ -772,6 +842,40 @@ export class RetroService {
         name: comment.creator.name,
       },
     };
+  }
+
+  private async getIsAllCardsHiddenByItemId(itemId: number) {
+    const item = await this.prisma.retroItem.findUnique({
+      where: { id: itemId },
+      select: {
+        column: {
+          select: {
+            board: {
+              select: {
+                team: {
+                  select: {
+                    isAllCardsHidden: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException(`Item ${itemId} not found`);
+    }
+
+    return item.column.board.team.isAllCardsHidden;
+  }
+
+  private maskItemDescription(
+    description: string,
+    isAllCardsHidden: boolean,
+  ) {
+    return isAllCardsHidden ? '' : description;
   }
 
   private toColumnColors(color: Prisma.JsonValue): ColumnColors {

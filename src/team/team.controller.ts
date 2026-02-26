@@ -2,7 +2,13 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from 
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
-import { AddTeamMemberDto, CreateTeamDto, UpdateTeamDto, UpdateTeamMemberRoleDto } from './dto/team.dto';
+import {
+  AddTeamMemberDto,
+  CreateTeamDto,
+  UpdateTeamCardsVisibilityDto,
+  UpdateTeamDto,
+  UpdateTeamMemberRoleDto,
+} from './dto/team.dto';
 import { TeamService } from './team.service';
 
 @ApiTags('teams')
@@ -56,6 +62,33 @@ export class TeamController {
     @Body() body: UpdateTeamDto,
   ) {
     return this.teamService.updateTeam(teamId, user.id, body);
+  }
+
+  @Patch(':teamId/is-all-cards-hidden')
+  @ApiOperation({ summary: 'Update team cards visibility (OWNER/ADMIN only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        isAllCardsHidden: true,
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Team cards visibility updated',
+    schema: {
+      example: {
+        id: 1,
+        isAllCardsHidden: true,
+        updatedAt: '2026-02-25T12:30:00.000Z',
+      },
+    },
+  })
+  updateTeamCardsVisibility(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Body() body: UpdateTeamCardsVisibilityDto,
+  ) {
+    return this.teamService.updateIsAllCardsHidden(teamId, user.id, body.isAllCardsHidden);
   }
 
   @Get(':teamId/members')

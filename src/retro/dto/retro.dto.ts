@@ -282,6 +282,9 @@ export class RetroBoardResponseDto {
   @ApiProperty({ example: 1 })
   teamId!: number;
 
+  @ApiProperty({ example: false })
+  isAllCardsHidden!: boolean;
+
   @ApiProperty({ example: 'Sprint 12 Retro' })
   name!: string;
 

@@ -127,6 +127,24 @@ export class TeamService {
     return team;
   }
 
+  async updateIsAllCardsHidden(
+    teamId: number,
+    actorUserId: string,
+    isAllCardsHidden: boolean,
+  ) {
+    await this.ensureTeamAdminOrOwner(teamId, actorUserId);
+
+    return this.prisma.team.update({
+      where: { id: teamId },
+      data: { isAllCardsHidden },
+      select: {
+        id: true,
+        isAllCardsHidden: true,
+        updatedAt: true,
+      },
+    });
+  }
+
   async getMembers(teamId: number, userId: string) {
     await this.ensureTeamMember(teamId, userId);
 
