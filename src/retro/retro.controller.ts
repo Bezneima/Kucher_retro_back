@@ -8,13 +8,11 @@ import {
   CreateItemCommentDto,
   CreateItemDto,
   GetBoardsQueryDto,
-  ReorderColumnsDto,
   RetroBoardResponseDto,
   RetroItemCommentResponseDto,
   RetroColumnResponseDto,
   RetroItemResponseDto,
   SyncItemPositionsDto,
-  UpdateBoardNameDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
@@ -67,24 +65,6 @@ export class RetroController {
     @Param('boardId', ParseIntPipe) boardId: number,
   ) {
     return this.retroService.getBoardColumns(boardId, user.id);
-  }
-
-  @Patch('boards/:boardId/name')
-  @ApiOperation({ summary: 'Rename board (OWNER/ADMIN only)' })
-  @ApiBody({
-    schema: {
-      example: {
-        name: 'Sprint 13 Retro',
-      },
-    },
-  })
-  @ApiOkResponse({ type: RetroBoardResponseDto })
-  updateBoardName(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('boardId', ParseIntPipe) boardId: number,
-    @Body() body: UpdateBoardNameDto,
-  ) {
-    return this.retroService.updateBoardName(boardId, user.id, body.name);
   }
 
   @Post('boards/:boardId/columns')
@@ -275,24 +255,6 @@ export class RetroController {
     @Body() body: UpdateItemCommentDto,
   ) {
     return this.retroService.updateItemComment(commentId, user.id, body.text);
-  }
-
-  @Patch('boards/:boardId/columns/reorder')
-  @ApiOperation({ summary: 'Reorder board columns by indexes' })
-  @ApiBody({
-    schema: {
-      example: {
-        oldIndex: 0,
-        newIndex: 2,
-      },
-    },
-  })
-  reorderColumns(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('boardId', ParseIntPipe) boardId: number,
-    @Body() body: ReorderColumnsDto,
-  ) {
-    return this.retroService.reorderColumns(boardId, user.id, body.oldIndex, body.newIndex);
   }
 
   @Patch('boards/:boardId/items/positions')

@@ -6,11 +6,12 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { RetroModule } from './retro/retro.module';
+import { SocketModule } from './socket/socket.module';
 import { TeamModule } from './team/team.module';
 import { TeamInviteModule } from './team-invite/team-invite.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RetroModule, TeamModule, TeamInviteModule],
+  imports: [PrismaModule, AuthModule, RetroModule, TeamModule, TeamInviteModule, SocketModule],
   controllers: [AppController],
   providers: [
     AppService,

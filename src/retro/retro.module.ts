@@ -5,6 +5,6 @@ import { RetroService } from './retro.service';
 @Module({
   controllers: [RetroController],
   providers: [RetroService],
+  exports: [RetroService],
 })
 export class RetroModule {}
-
