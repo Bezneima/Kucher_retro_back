@@ -58,3 +58,17 @@ export class ChangePasswordDto {
   @MinLength(8)
   newPassword!: string;
 }
+
+export class GoogleExchangeTokenDto {
+  @ApiProperty({ example: 'WjKkJx7WwXH-9X8HWsPWiX3fRbPCs7Xf_LCZda0bZX4' })
+  @IsString()
+  exchangeToken!: string;
+}
+
+export class GoogleExchangeResponseDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  accessToken!: string;
+
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  refreshToken!: string;
+}

@@ -38,6 +38,33 @@ npm run start:dev
 - Swagger: `http://localhost:3000/docs`
 - Health check: `http://localhost:3000/health`
 
+## Google OAuth Env
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI` (backend callback, например `http://localhost:3000/auth/google/callback`)
+- `FRONTEND_URL` (например `http://localhost:5173`)
+- `GOOGLE_OAUTH_SCOPES` (default: `openid email profile`)
+- `GOOGLE_OAUTH_STATE_TTL_SEC` (default: `300`)
+- `GOOGLE_EXCHANGE_TOKEN_TTL_SEC` (default: `60`)
+
+## Google OAuth API
+- `GET /auth/google/start?returnTo=/teams`
+  - Генерирует одноразовый `state` (TTL + one-time-use) и делает redirect на Google consent screen.
+- `GET /auth/google/callback?code=...&state=...`
+  - Валидирует `state`, обменивает `code`, валидирует Google `id_token`, логинит/создает/линкует пользователя.
+  - Генерирует одноразовый `exchangeToken` (TTL + one-time-use) и делает redirect на:
+    - `${FRONTEND_URL}/auth/google/callback?exchangeToken=...&returnTo=...`
+- `POST /auth/google/exchange`
+  - Body: `{ \"exchangeToken\": \"...\" }`
+  - Response: `{ \"accessToken\": \"...\", \"refreshToken\": \"...\" }`
+  - Повторный/просроченный `exchangeToken` -> `401` с `{ \"message\": \"Invalid or expired exchange token\" }`
+
+## Manual Google OAuth Checklist
+- `/auth` -> Google -> возврат на `/teams`.
+- Invite flow после Google логина работает.
+- Повторный `POST /auth/google/exchange` с тем же `exchangeToken` падает.
+- `POST /auth/refresh` после Google логина работает.
+
 ## WebSocket Bootstrap
 - Namespace: `ws://localhost:3000/ws` (Socket.IO)
 - Auth: передай `accessToken` в `auth.token`

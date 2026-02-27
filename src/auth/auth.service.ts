@@ -70,8 +70,7 @@ export class AuthService {
       },
     });
 
-    const tokenPair = await this.issueTokenPair(user);
-    await this.storeRefreshToken(user.id, tokenPair.refreshToken);
+    const tokenPair = await this.issueAppTokenPair(user);
 
     return {
       user: this.toAuthUser(user),
@@ -95,8 +94,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokenPair = await this.issueTokenPair(user);
-    await this.storeRefreshToken(user.id, tokenPair.refreshToken);
+    const tokenPair = await this.issueAppTokenPair(user);
 
     return {
       user: this.toAuthUser(user),
@@ -132,8 +130,7 @@ export class AuthService {
       data: { revokedAt: new Date() },
     });
 
-    const tokenPair = await this.issueTokenPair(storedToken.user);
-    await this.storeRefreshToken(storedToken.user.id, tokenPair.refreshToken);
+    const tokenPair = await this.issueAppTokenPair(storedToken.user);
 
     return tokenPair;
   }
@@ -234,6 +231,13 @@ export class AuthService {
     ]);
 
     return { success: true };
+  }
+
+  async issueAppTokenPair(user: Pick<User, 'id' | 'email'>) {
+    const tokenPair = await this.issueTokenPair(user);
+    await this.storeRefreshToken(user.id, tokenPair.refreshToken);
+
+    return tokenPair;
   }
 
   private async issueTokenPair(user: Pick<User, 'id' | 'email'>) {
