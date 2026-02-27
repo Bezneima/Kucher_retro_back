@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from 
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { RealtimeService } from '../realtime/realtime.service';
 import {
   AddTeamMemberDto,
   CreateTeamDto,
@@ -11,11 +12,18 @@ import {
 } from './dto/team.dto';
 import { TeamService } from './team.service';
 
+const TEAM_EVENTS = {
+  allCardsVisibilityUpdated: 'team.all-cards-visibility.updated',
+} as const;
+
 @ApiTags('teams')
 @ApiBearerAuth()
 @Controller('teams')
 export class TeamController {
-  constructor(private readonly teamService: TeamService) {}
+  constructor(
+    private readonly teamService: TeamService,
+    private readonly realtimeService: RealtimeService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create team and assign current user as OWNER' })
@@ -83,12 +91,22 @@ export class TeamController {
       },
     },
   })
-  updateTeamCardsVisibility(
+  async updateTeamCardsVisibility(
     @CurrentUser() user: AuthenticatedUser,
     @Param('teamId', ParseIntPipe) teamId: number,
     @Body() body: UpdateTeamCardsVisibilityDto,
   ) {
-    return this.teamService.updateIsAllCardsHidden(teamId, user.id, body.isAllCardsHidden);
+    const result = await this.teamService.updateIsAllCardsHidden(
+      teamId,
+      user.id,
+      body.isAllCardsHidden,
+    );
+    await this.realtimeService.emitToTeam(
+      teamId,
+      TEAM_EVENTS.allCardsVisibilityUpdated,
+      result,
+    );
+    return result;
   }
 
   @Get(':teamId/members')

@@ -92,7 +92,8 @@ Broadcast для других пользователей в этой доске:
 - payload: обновленный объект доски
 
 ### Reorder board columns via socket
-HTTP ручка `PATCH /retro/boards/:boardId/columns/reorder` перенесена в websocket event `board.columns.reorder`.
+HTTP ручка `PATCH /retro/boards/:boardId/columns/reorder` и socket event `board.columns.reorder`
+используют одинаковую бизнес-логику перестановки колонок.
 
 Клиент:
 ```ts
@@ -111,8 +112,26 @@ Payload:
 - `newIndex`: number (>= 0)
 
 Broadcast для других пользователей в этой доске:
-- event: `board.columns.reordered`
+- canonical event: `retro.board.columns.reordered`
 - payload: `{ boardId, columns }`
+- compatibility event: `board.columns.reordered` (тот же payload)
+
+### Sync item positions realtime payload
+Для ручки `PATCH /retro/boards/:boardId/items/positions` сервер шлет событие:
+- event: `retro.board.items.positions.synced`
+- payload:
+
+```ts
+{
+  boardId: number;
+  updated: number;
+  changedColumnIds: number[];
+  columns: RetroColumnResponseDto[];
+}
+```
+
+`columns` содержит полные измененные колонки (с карточками).  
+Если в одном батче затронуто больше двух колонок, в payload приходят все измененные колонки.
 
 ## Prisma
 Модели пока не добавлены. Опиши их в `prisma/schema.prisma`, затем выполни:

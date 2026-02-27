@@ -11,6 +11,7 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Public } from '../auth/decorators/public.decorator';
+import { RealtimeService } from '../realtime/realtime.service';
 import { RetroService } from '../retro/retro.service';
 import { Namespace, Socket } from 'socket.io';
 
@@ -57,9 +58,12 @@ export class RetroGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly retroService: RetroService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   afterInit(server: Namespace) {
+    this.realtimeService.bindNamespace(server);
+
     server.use(async (socket, next) => {
       try {
         const token = this.extractAuthToken(socket);
@@ -85,12 +89,17 @@ export class RetroGateway
       ? `Socket connected: ${client.id}; userId=${user.id}; email=${user.email}`
       : `Socket connected: ${client.id}; user=unknown`;
 
+    if (user) {
+      this.realtimeService.registerClient(client, user.id);
+    }
+
     this.logger.log(userLog);
     client.send('hello world');
     client.send(userLog);
   }
 
   handleDisconnect(client: Socket) {
+    this.realtimeService.unregisterClient(client);
     this.logger.debug(`Socket disconnected: ${client.id}`);
   }
 
@@ -155,9 +164,11 @@ export class RetroGateway
         oldIndex,
         newIndex,
       );
+      const payload = { boardId, columns };
+      client.to(this.getBoardRoom(boardId)).emit('board.columns.reordered', payload);
       client
         .to(this.getBoardRoom(boardId))
-        .emit('board.columns.reordered', { boardId, columns });
+        .emit('retro.board.columns.reordered', payload);
       return columns;
     } catch (error) {
       if (error instanceof HttpException) {

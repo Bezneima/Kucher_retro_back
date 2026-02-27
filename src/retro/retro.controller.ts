@@ -2,31 +2,59 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query 
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { RealtimeService } from '../realtime/realtime.service';
 import {
-  CreateColumnDto,
   CreateBoardDto,
+  CreateColumnDto,
   CreateItemCommentDto,
   CreateItemDto,
   GetBoardsQueryDto,
+  ReorderColumnsDto,
+  ReorderColumnsResponseDto,
   RetroBoardResponseDto,
-  RetroItemCommentResponseDto,
   RetroColumnResponseDto,
+  RetroItemCommentResponseDto,
   RetroItemResponseDto,
+  SyncItemPositionsResponseDto,
   SyncItemPositionsDto,
+  UpdateBoardNameDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
-  UpdateItemCommentDto,
   UpdateItemColorDto,
+  UpdateItemCommentDto,
   UpdateItemDescriptionDto,
 } from './dto/retro.dto';
 import { RetroService } from './retro.service';
+
+const RETRO_EVENTS = {
+  boardRenamed: 'retro.board.renamed',
+  boardColumnsReordered: 'retro.board.columns.reordered',
+  boardItemPositionsSynced: 'retro.board.items.positions.synced',
+  columnCreated: 'retro.column.created',
+  columnNameUpdated: 'retro.column.name.updated',
+  columnColorUpdated: 'retro.column.color.updated',
+  columnDescriptionUpdated: 'retro.column.description.updated',
+  columnDeleted: 'retro.column.deleted',
+  itemCreated: 'retro.item.created',
+  itemDescriptionUpdated: 'retro.item.description.updated',
+  itemLikeToggled: 'retro.item.like.toggled',
+  itemColorUpdated: 'retro.item.color.updated',
+  itemDeleted: 'retro.item.deleted',
+  itemCommentsFetched: 'retro.item.comments.fetched',
+  itemCommentCreated: 'retro.item.comment.created',
+  itemCommentUpdated: 'retro.item.comment.updated',
+  itemCommentDeleted: 'retro.item.comment.deleted',
+} as const;
 
 @ApiTags('retro')
 @ApiBearerAuth()
 @Controller('retro')
 export class RetroController {
-  constructor(private readonly retroService: RetroService) {}
+  constructor(
+    private readonly retroService: RetroService,
+    private readonly realtimeService: RealtimeService,
+  ) {}
 
   @Post('boards')
   @ApiOperation({ summary: 'Create new board for team (OWNER/ADMIN only)' })
@@ -67,6 +95,61 @@ export class RetroController {
     return this.retroService.getBoardColumns(boardId, user.id);
   }
 
+  @Patch('boards/:boardId/name')
+  @ApiOperation({ summary: 'Rename board' })
+  @ApiBody({
+    schema: {
+      example: {
+        name: 'Sprint 13 Retro',
+      },
+    },
+  })
+  async updateBoardName(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId', ParseIntPipe) boardId: number,
+    @Body() body: UpdateBoardNameDto,
+  ) {
+    const context = await this.retroService.getBoardRealtimeContext(boardId, user.id);
+    const updatedBoard = await this.retroService.updateBoardName(boardId, user.id, body.name);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.boardRenamed, updatedBoard);
+    return updatedBoard;
+  }
+
+  @Patch('boards/:boardId/columns/reorder')
+  @ApiOperation({ summary: 'Reorder board columns' })
+  @ApiBody({
+    schema: {
+      example: {
+        oldIndex: 0,
+        newIndex: 2,
+      },
+    },
+  })
+  @ApiOkResponse({ type: ReorderColumnsResponseDto })
+  async reorderColumns(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('boardId', ParseIntPipe) boardId: number,
+    @Body() body: ReorderColumnsDto,
+  ) {
+    const context = await this.retroService.getBoardRealtimeContext(boardId, user.id);
+    const columns = await this.retroService.reorderColumns(
+      boardId,
+      user.id,
+      body.oldIndex,
+      body.newIndex,
+    );
+    const payload = {
+      boardId: context.boardId,
+      columns,
+    };
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.boardColumnsReordered,
+      payload,
+    );
+    return payload;
+  }
+
   @Post('boards/:boardId/columns')
   @ApiOperation({ summary: 'Create new column on board' })
   @ApiBody({
@@ -81,18 +164,24 @@ export class RetroController {
       },
     },
   })
-  createColumn(
+  async createColumn(
     @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: CreateColumnDto,
   ) {
-    return this.retroService.createColumn(
+    const context = await this.retroService.getBoardRealtimeContext(boardId, user.id);
+    const column = await this.retroService.createColumn(
       boardId,
       user.id,
       body.name,
       body.description,
       body.color,
     );
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.columnCreated, {
+      boardId: context.boardId,
+      ...column,
+    });
+    return column;
   }
 
   @Post('columns/:columnId/items')
@@ -105,12 +194,18 @@ export class RetroController {
     },
   })
   @ApiOkResponse({ type: RetroItemResponseDto })
-  addItemToColumn(
+  async addItemToColumn(
     @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: CreateItemDto,
   ) {
-    return this.retroService.addItemToColumn(columnId, user.id, body.description);
+    const context = await this.retroService.getColumnRealtimeContext(columnId, user.id);
+    const item = await this.retroService.addItemToColumn(columnId, user.id, body.description);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemCreated, {
+      boardId: context.boardId,
+      ...item,
+    });
+    return item;
   }
 
   @Patch('columns/:columnId/name')
@@ -122,12 +217,18 @@ export class RetroController {
       },
     },
   })
-  updateColumnName(
+  async updateColumnName(
     @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnNameDto,
   ) {
-    return this.retroService.updateColumnName(columnId, user.id, body.name);
+    const context = await this.retroService.getColumnRealtimeContext(columnId, user.id);
+    const column = await this.retroService.updateColumnName(columnId, user.id, body.name);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.columnNameUpdated, {
+      ...column,
+      boardId: context.boardId,
+    });
+    return column;
   }
 
   @Patch('columns/:id/color')
@@ -143,12 +244,18 @@ export class RetroController {
       },
     },
   })
-  updateColumnColor(
+  async updateColumnColor(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnColorDto,
   ) {
-    return this.retroService.updateColumnColor(columnId, user.id, body.color);
+    const context = await this.retroService.getColumnRealtimeContext(columnId, user.id);
+    const column = await this.retroService.updateColumnColor(columnId, user.id, body.color);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.columnColorUpdated, {
+      ...column,
+      boardId: context.boardId,
+    });
+    return column;
   }
 
   @Patch('columns/:columnId/description')
@@ -160,12 +267,22 @@ export class RetroController {
       },
     },
   })
-  updateColumnDescription(
+  async updateColumnDescription(
     @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
     @Body() body: UpdateColumnDescriptionDto,
   ) {
-    return this.retroService.updateColumnDescription(columnId, user.id, body.description);
+    const context = await this.retroService.getColumnRealtimeContext(columnId, user.id);
+    const column = await this.retroService.updateColumnDescription(columnId, user.id, body.description);
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.columnDescriptionUpdated,
+      {
+        ...column,
+        boardId: context.boardId,
+      },
+    );
+    return column;
   }
 
   @Patch('items/:itemId/description')
@@ -177,21 +294,37 @@ export class RetroController {
       },
     },
   })
-  updateItemDescription(
+  async updateItemDescription(
     @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() body: UpdateItemDescriptionDto,
   ) {
-    return this.retroService.updateItemDescription(itemId, user.id, body.description);
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const item = await this.retroService.updateItemDescription(itemId, user.id, body.description);
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.itemDescriptionUpdated,
+      {
+        boardId: context.boardId,
+        ...item,
+      },
+    );
+    return item;
   }
 
   @Patch('items/:itemId/like')
   @ApiOperation({ summary: 'Toggle item like for current user' })
-  toggleItemLike(
+  async toggleItemLike(
     @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
   ) {
-    return this.retroService.toggleItemLike(itemId, user.id);
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const item = await this.retroService.toggleItemLike(itemId, user.id);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemLikeToggled, {
+      boardId: context.boardId,
+      ...item,
+    });
+    return item;
   }
 
   @Patch('items/:itemId/color')
@@ -203,22 +336,39 @@ export class RetroController {
       },
     },
   })
-  updateItemColor(
+  async updateItemColor(
     @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() body: UpdateItemColorDto,
   ) {
-    return this.retroService.updateItemColor(itemId, user.id, body.color);
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const item = await this.retroService.updateItemColor(itemId, user.id, body.color);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemColorUpdated, {
+      boardId: context.boardId,
+      ...item,
+    });
+    return item;
   }
 
   @Get('items/:itemId/comments')
   @ApiOperation({ summary: 'Get all comments for item (oldest first)' })
   @ApiOkResponse({ type: [RetroItemCommentResponseDto] })
-  getItemComments(
+  async getItemComments(
     @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
   ) {
-    return this.retroService.getItemComments(itemId, user.id);
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const comments = await this.retroService.getItemComments(itemId, user.id);
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.itemCommentsFetched,
+      {
+        boardId: context.boardId,
+        itemId: context.itemId,
+        comments,
+      },
+    );
+    return comments;
   }
 
   @Post('items/:itemId/comments')
@@ -231,12 +381,18 @@ export class RetroController {
     },
   })
   @ApiOkResponse({ type: RetroItemCommentResponseDto })
-  createItemComment(
+  async createItemComment(
     @CurrentUser() user: AuthenticatedUser,
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() body: CreateItemCommentDto,
   ) {
-    return this.retroService.createItemComment(itemId, user.id, body.text);
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const comment = await this.retroService.createItemComment(itemId, user.id, body.text);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemCommentCreated, {
+      boardId: context.boardId,
+      ...comment,
+    });
+    return comment;
   }
 
   @Patch('comments/:commentId')
@@ -249,12 +405,18 @@ export class RetroController {
     },
   })
   @ApiOkResponse({ type: RetroItemCommentResponseDto })
-  updateItemComment(
+  async updateItemComment(
     @CurrentUser() user: AuthenticatedUser,
     @Param('commentId', ParseIntPipe) commentId: number,
     @Body() body: UpdateItemCommentDto,
   ) {
-    return this.retroService.updateItemComment(commentId, user.id, body.text);
+    const context = await this.retroService.getCommentRealtimeContext(commentId, user.id);
+    const comment = await this.retroService.updateItemComment(commentId, user.id, body.text);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemCommentUpdated, {
+      boardId: context.boardId,
+      ...comment,
+    });
+    return comment;
   }
 
   @Patch('boards/:boardId/items/positions')
@@ -266,35 +428,68 @@ export class RetroController {
       },
     },
   })
-  syncItemPositions(
+  @ApiOkResponse({ type: SyncItemPositionsResponseDto })
+  async syncItemPositions(
     @CurrentUser() user: AuthenticatedUser,
     @Param('boardId', ParseIntPipe) boardId: number,
     @Body() body: SyncItemPositionsDto,
   ) {
-    return this.retroService.syncItemPositions(boardId, user.id, body.changes);
+    const context = await this.retroService.getBoardRealtimeContext(boardId, user.id);
+    const result = await this.retroService.syncItemPositions(boardId, user.id, body.changes);
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.boardItemPositionsSynced,
+      result,
+    );
+    return result;
   }
 
   @Delete('columns/:columnId')
   @ApiOperation({ summary: 'Delete column with all items' })
-  deleteColumn(
+  async deleteColumn(
     @CurrentUser() user: AuthenticatedUser,
     @Param('columnId', ParseIntPipe) columnId: number,
   ) {
-    return this.retroService.deleteColumn(columnId, user.id);
+    const context = await this.retroService.getColumnRealtimeContext(columnId, user.id);
+    const result = await this.retroService.deleteColumn(columnId, user.id);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.columnDeleted, {
+      boardId: context.boardId,
+      columnId: context.columnId,
+      ...result,
+    });
+    return result;
   }
 
   @Delete('items/:itemId')
   @ApiOperation({ summary: 'Delete item' })
-  deleteItem(@CurrentUser() user: AuthenticatedUser, @Param('itemId', ParseIntPipe) itemId: number) {
-    return this.retroService.deleteItem(itemId, user.id);
+  async deleteItem(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    const context = await this.retroService.getItemRealtimeContext(itemId, user.id);
+    const result = await this.retroService.deleteItem(itemId, user.id);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemDeleted, {
+      boardId: context.boardId,
+      itemId: context.itemId,
+      ...result,
+    });
+    return result;
   }
 
   @Delete('comments/:commentId')
   @ApiOperation({ summary: 'Delete item comment (author or ADMIN/OWNER only)' })
-  deleteItemComment(
+  async deleteItemComment(
     @CurrentUser() user: AuthenticatedUser,
     @Param('commentId', ParseIntPipe) commentId: number,
   ) {
-    return this.retroService.deleteItemComment(commentId, user.id);
+    const context = await this.retroService.getCommentRealtimeContext(commentId, user.id);
+    const result = await this.retroService.deleteItemComment(commentId, user.id);
+    await this.realtimeService.emitToTeam(context.teamId, RETRO_EVENTS.itemCommentDeleted, {
+      boardId: context.boardId,
+      commentId: context.commentId,
+      itemId: context.itemId,
+      ...result,
+    });
+    return result;
   }
 }

@@ -12,6 +12,17 @@ import {
   ItemPositionChangeDto,
 } from './dto/retro.dto';
 
+const COLUMN_ITEMS_INCLUDE = {
+  items: {
+    orderBy: { rowIndex: 'asc' },
+    include: {
+      _count: {
+        select: { comments: true },
+      },
+    },
+  },
+} satisfies Prisma.RetroColumnInclude;
+
 const BOARD_INCLUDE = {
   team: {
     select: {
@@ -20,16 +31,7 @@ const BOARD_INCLUDE = {
   },
   columns: {
     orderBy: { orderIndex: 'asc' },
-    include: {
-      items: {
-        orderBy: { rowIndex: 'asc' },
-        include: {
-          _count: {
-            select: { comments: true },
-          },
-        },
-      },
-    },
+    include: COLUMN_ITEMS_INCLUDE,
   },
 } satisfies Prisma.RetroBoardInclude;
 
@@ -38,6 +40,9 @@ type RetroBoardWithColumns = Prisma.RetroBoardGetPayload<{
 }>;
 type RetroBoardColumn = RetroBoardWithColumns['columns'][number];
 type RetroBoardItem = RetroBoardColumn['items'][number];
+type RetroColumnWithItems = Prisma.RetroColumnGetPayload<{
+  include: typeof COLUMN_ITEMS_INCLUDE;
+}>;
 
 const COMMENT_INCLUDE = {
   creator: {
@@ -140,6 +145,153 @@ export class RetroService {
   async getBoardColumns(boardId: number, userId: string) {
     const board = await this.getBoardOrFail(boardId, userId);
     return this.mapBoard(board).columns;
+  }
+
+  async getBoardRealtimeContext(boardId: number, userId: string) {
+    const board = await this.prisma.retroBoard.findFirst({
+      where: {
+        id: boardId,
+        team: {
+          members: {
+            some: { userId },
+          },
+        },
+      },
+      select: { teamId: true },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    return {
+      teamId: board.teamId,
+      boardId,
+    };
+  }
+
+  async getColumnRealtimeContext(columnId: number, userId: string) {
+    const column = await this.prisma.retroColumn.findFirst({
+      where: {
+        id: columnId,
+        board: {
+          team: {
+            members: {
+              some: { userId },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        board: {
+          select: {
+            id: true,
+            teamId: true,
+          },
+        },
+      },
+    });
+
+    if (!column) {
+      throw new NotFoundException(`Column ${columnId} not found`);
+    }
+
+    return {
+      teamId: column.board.teamId,
+      boardId: column.board.id,
+      columnId: column.id,
+    };
+  }
+
+  async getItemRealtimeContext(itemId: number, userId: string) {
+    const item = await this.prisma.retroItem.findFirst({
+      where: {
+        id: itemId,
+        column: {
+          board: {
+            team: {
+              members: {
+                some: { userId },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        column: {
+          select: {
+            id: true,
+            board: {
+              select: {
+                id: true,
+                teamId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException(`Item ${itemId} not found`);
+    }
+
+    return {
+      teamId: item.column.board.teamId,
+      boardId: item.column.board.id,
+      itemId: item.id,
+      columnId: item.column.id,
+    };
+  }
+
+  async getCommentRealtimeContext(commentId: number, userId: string) {
+    const comment = await this.prisma.retroItemComment.findFirst({
+      where: {
+        id: commentId,
+        item: {
+          column: {
+            board: {
+              team: {
+                members: {
+                  some: { userId },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        item: {
+          select: {
+            id: true,
+            column: {
+              select: {
+                board: {
+                  select: {
+                    id: true,
+                    teamId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!comment) {
+      throw new NotFoundException(`Comment ${commentId} not found`);
+    }
+
+    return {
+      teamId: comment.item.column.board.teamId,
+      boardId: comment.item.column.board.id,
+      commentId: comment.id,
+      itemId: comment.item.id,
+    };
   }
 
   async updateBoardName(boardId: number, userId: string, name: string) {
@@ -487,7 +639,12 @@ export class RetroService {
     changes: ItemPositionChangeDto[],
   ) {
     if (changes.length === 0) {
-      return { updated: 0 };
+      return {
+        boardId,
+        updated: 0,
+        changedColumnIds: [],
+        columns: [],
+      };
     }
 
     await this.ensureBoardAccessible(boardId, userId);
@@ -526,7 +683,7 @@ export class RetroService {
           boardId,
         },
       },
-      select: { id: true },
+      select: { id: true, columnId: true },
     });
 
     if (items.length !== uniqueItemIds.length) {
@@ -545,7 +702,51 @@ export class RetroService {
       ),
     );
 
-    return { updated: changes.length };
+    const changedColumnIdsSet = new Set<number>();
+    for (const item of items) {
+      changedColumnIdsSet.add(item.columnId);
+    }
+    for (const change of changes) {
+      changedColumnIdsSet.add(change.newColumnId);
+    }
+
+    const changedColumnIds = Array.from(changedColumnIdsSet);
+
+    const [board, changedColumns] = await Promise.all([
+      this.prisma.retroBoard.findUnique({
+        where: { id: boardId },
+        select: {
+          team: {
+            select: {
+              isAllCardsHidden: true,
+            },
+          },
+        },
+      }),
+      this.prisma.retroColumn.findMany({
+        where: {
+          boardId,
+          id: {
+            in: changedColumnIds,
+          },
+        },
+        orderBy: { orderIndex: 'asc' },
+        include: COLUMN_ITEMS_INCLUDE,
+      }),
+    ]);
+
+    if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    return {
+      boardId,
+      updated: changes.length,
+      changedColumnIds: changedColumns.map((column) => column.id),
+      columns: changedColumns.map((column) =>
+        this.mapColumn(column, board.team.isAllCardsHidden),
+      ),
+    };
   }
 
   async deleteColumn(columnId: number, userId: string) {
@@ -799,6 +1000,32 @@ export class RetroService {
     }
   }
 
+  private mapColumn(
+    column: RetroBoardColumn | RetroColumnWithItems,
+    isAllCardsHidden: boolean,
+  ) {
+    return {
+      id: column.id,
+      name: column.name,
+      description: column.description,
+      color: this.toColumnColors(column.color),
+      isNameEditing: false,
+      items: column.items.map((item: RetroBoardItem) => ({
+        id: item.id,
+        description: this.maskItemDescription(
+          item.description,
+          isAllCardsHidden,
+        ),
+        createdAt: item.createdAt,
+        likes: item.likes,
+        color: item.color ?? undefined,
+        columnIndex: column.orderIndex,
+        rowIndex: item.rowIndex,
+        commentsCount: item._count.comments,
+      })),
+    };
+  }
+
   private mapBoard(board: RetroBoardWithColumns) {
     return {
       id: board.id,
@@ -807,26 +1034,9 @@ export class RetroService {
       name: board.name,
       date: board.date.toISOString().slice(0, 10),
       description: board.description,
-      columns: board.columns.map((column: RetroBoardColumn) => ({
-        id: column.id,
-        name: column.name,
-        description: column.description,
-        color: this.toColumnColors(column.color),
-        isNameEditing: false,
-        items: column.items.map((item: RetroBoardItem) => ({
-          id: item.id,
-          description: this.maskItemDescription(
-            item.description,
-            board.team.isAllCardsHidden,
-          ),
-          createdAt: item.createdAt,
-          likes: item.likes,
-          color: item.color ?? undefined,
-          columnIndex: column.orderIndex,
-          rowIndex: item.rowIndex,
-          commentsCount: item._count.comments,
-        })),
-      })),
+      columns: board.columns.map((column: RetroBoardColumn) =>
+        this.mapColumn(column, board.team.isAllCardsHidden),
+      ),
     };
   }
 

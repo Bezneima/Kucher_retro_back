@@ -275,6 +275,28 @@ export class RetroColumnResponseDto {
   items!: RetroItemResponseDto[];
 }
 
+export class ReorderColumnsResponseDto {
+  @ApiProperty({ example: 1 })
+  boardId!: number;
+
+  @ApiProperty({ type: [RetroColumnResponseDto] })
+  columns!: RetroColumnResponseDto[];
+}
+
+export class SyncItemPositionsResponseDto {
+  @ApiProperty({ example: 1 })
+  boardId!: number;
+
+  @ApiProperty({ example: 2 })
+  updated!: number;
+
+  @ApiProperty({ type: [Number], example: [7, 8] })
+  changedColumnIds!: number[];
+
+  @ApiProperty({ type: [RetroColumnResponseDto] })
+  columns!: RetroColumnResponseDto[];
+}
+
 export class RetroBoardResponseDto {
   @ApiProperty({ example: 1 })
   id!: number;
