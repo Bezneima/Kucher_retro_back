@@ -157,11 +157,35 @@ Broadcast для других пользователей в этой доске:
 }
 ```
 
-`columns` содержит полные измененные колонки (с карточками).  
+`changes` в HTTP body поддерживает поле `newGroupId?: number | null`.
+Если `newGroupId` передан, карточка переносится в указанную группу (группа должна принадлежать `newColumnId`).
+
+`columns` содержит полные измененные колонки (с карточками и группами).  
 Если в одном батче затронуто больше двух колонок, в payload приходят все измененные колонки.
 
-## Prisma
-Модели пока не добавлены. Опиши их в `prisma/schema.prisma`, затем выполни:
-```bash
-npm run prisma:migrate -- --name init
+### Sync group positions via socket
+HTTP ручка `PATCH /retro/boards/:boardId/groups/positions` и socket event `board.groups.positions.sync`
+используют одинаковую бизнес-логику перемещения групп между колонками.
+
+Клиент:
+```ts
+socket.emit(
+  'board.groups.positions.sync',
+  { boardId: 1, changes: [{ groupId: 5, newColumnId: 7, newOrderIndex: 0 }] },
+  (response) => {
+    console.log('synced group positions:', response);
+  },
+);
 ```
+
+Broadcast для других пользователей в этой доске:
+- canonical event: `retro.board.groups.positions.synced`
+- compatibility event: `board.groups.positions.synced`
+- payload: `{ boardId, updated, changedColumnIds, columns }`
+
+### Group API
+- `POST /retro/columns/:columnId/groups`
+- `PATCH /retro/groups/:groupId/name`
+- `PATCH /retro/groups/:groupId/color`
+- `PATCH /retro/groups/:groupId/description`
+- `DELETE /retro/groups/:groupId`

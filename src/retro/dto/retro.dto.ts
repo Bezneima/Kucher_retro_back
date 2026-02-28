@@ -121,6 +121,13 @@ export class CreateItemDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ example: 3, nullable: true })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  groupId?: number | null;
 }
 
 export class UpdateItemDescriptionDto {
@@ -148,6 +155,58 @@ export class UpdateItemCommentDto {
   @IsString()
   @IsNotEmpty()
   text!: string;
+}
+
+export class CreateGroupDto {
+  @ApiPropertyOptional({ example: 'Новая группа' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Подсказка для участников по заполнению группы' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ColumnColorDto)
+  color?: ColumnColorDto;
+}
+
+export class UpdateGroupNameDto {
+  @ApiProperty({ example: 'Что обсудить отдельно?' })
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+}
+
+export class UpdateGroupColorDto {
+  @ApiProperty({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
+  @ValidateNested()
+  @Type(() => ColumnColorDto)
+  color!: ColumnColorDto;
+}
+
+export class UpdateGroupDescriptionDto {
+  @ApiProperty({ example: 'Группа для связанных карточек по релизу' })
+  @IsString()
+  description!: string;
 }
 
 export class ReorderColumnsDto {
@@ -181,6 +240,13 @@ export class ItemPositionChangeDto {
   @IsInt()
   @Min(0)
   newRowIndex!: number;
+
+  @ApiPropertyOptional({ example: 3, nullable: true })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  newGroupId?: number | null;
 }
 
 export class SyncItemPositionsDto {
@@ -192,6 +258,37 @@ export class SyncItemPositionsDto {
   @ValidateNested({ each: true })
   @Type(() => ItemPositionChangeDto)
   changes!: ItemPositionChangeDto[];
+}
+
+export class GroupPositionChangeDto {
+  @ApiProperty({ example: 5 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  groupId!: number;
+
+  @ApiProperty({ example: 7 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  newColumnId!: number;
+
+  @ApiProperty({ example: 0 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  newOrderIndex!: number;
+}
+
+export class SyncGroupPositionsDto {
+  @ApiProperty({
+    type: [GroupPositionChangeDto],
+    example: [{ groupId: 5, newColumnId: 7, newOrderIndex: 0 }],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GroupPositionChangeDto)
+  changes!: GroupPositionChangeDto[];
 }
 
 export class RetroItemResponseDto {
@@ -215,6 +312,9 @@ export class RetroItemResponseDto {
 
   @ApiProperty({ example: 0 })
   rowIndex!: number;
+
+  @ApiPropertyOptional({ example: 3, nullable: true })
+  groupId?: number | null;
 
   @ApiProperty({ example: 3 })
   commentsCount!: number;
@@ -248,6 +348,53 @@ export class RetroItemCommentResponseDto {
   creator!: CommentCreatorDto;
 }
 
+export class RetroGroupResponseDto {
+  @ApiProperty({ example: 3 })
+  id!: number;
+
+  @ApiProperty({ example: 7 })
+  columnId!: number;
+
+  @ApiProperty({ example: 'Технические долги' })
+  name!: string;
+
+  @ApiProperty({ example: 'Группа для карточек по техдолгу' })
+  description!: string;
+
+  @ApiProperty({
+    type: ColumnColorDto,
+    example: {
+      columnColor: '#FFDBD7',
+      itemColor: '#FF6161',
+      buttonColor: '#FF9594',
+    },
+  })
+  color!: ColumnColorDto;
+
+  @ApiProperty({ example: 0 })
+  orderIndex!: number;
+
+  @ApiProperty({ example: false })
+  isNameEditing!: boolean;
+
+  @ApiProperty({ type: [RetroItemResponseDto] })
+  items!: RetroItemResponseDto[];
+}
+
+export class RetroColumnEntryResponseDto {
+  @ApiProperty({ example: 'ITEM' })
+  type!: 'ITEM' | 'GROUP';
+
+  @ApiProperty({ example: 0 })
+  orderIndex!: number;
+
+  @ApiPropertyOptional({ type: RetroItemResponseDto })
+  item?: RetroItemResponseDto;
+
+  @ApiPropertyOptional({ type: RetroGroupResponseDto })
+  group?: RetroGroupResponseDto;
+}
+
 export class RetroColumnResponseDto {
   @ApiProperty({ example: 7 })
   id!: number;
@@ -273,6 +420,12 @@ export class RetroColumnResponseDto {
 
   @ApiProperty({ type: [RetroItemResponseDto] })
   items!: RetroItemResponseDto[];
+
+  @ApiProperty({ type: [RetroGroupResponseDto] })
+  groups!: RetroGroupResponseDto[];
+
+  @ApiProperty({ type: [RetroColumnEntryResponseDto] })
+  entries!: RetroColumnEntryResponseDto[];
 }
 
 export class ReorderColumnsResponseDto {
@@ -284,6 +437,20 @@ export class ReorderColumnsResponseDto {
 }
 
 export class SyncItemPositionsResponseDto {
+  @ApiProperty({ example: 1 })
+  boardId!: number;
+
+  @ApiProperty({ example: 2 })
+  updated!: number;
+
+  @ApiProperty({ type: [Number], example: [7, 8] })
+  changedColumnIds!: number[];
+
+  @ApiProperty({ type: [RetroColumnResponseDto] })
+  columns!: RetroColumnResponseDto[];
+}
+
+export class SyncGroupPositionsResponseDto {
   @ApiProperty({ example: 1 })
   boardId!: number;
 

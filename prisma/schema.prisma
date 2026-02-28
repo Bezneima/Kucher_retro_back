@@ -145,19 +145,36 @@ model AuthExchangeToken {
 }
 
 model RetroColumn {
-  id         Int         @id @default(autoincrement())
-  name       String
-  description String     @default("")
-  color      Json
-  orderIndex Int
-  boardId    Int
-  board      RetroBoard  @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  items      RetroItem[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String      @default("")
+  color       Json
+  orderIndex  Int
+  boardId     Int
+  board       RetroBoard  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  groups      RetroGroup[]
+  items       RetroItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([boardId, orderIndex])
   @@map("retro_columns")
+}
+
+model RetroGroup {
+  id          Int         @id @default(autoincrement())
+  columnId    Int
+  column      RetroColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  name        String
+  description String      @default("")
+  color       Json
+  orderIndex  Int
+  items       RetroItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([columnId, orderIndex])
+  @@map("retro_groups")
 }
 
 model RetroItem {
@@ -167,12 +184,14 @@ model RetroItem {
   color       String?
   rowIndex    Int
   columnId    Int
+  groupId     Int?
   column      RetroColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  group       RetroGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   comments    RetroItemComment[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  @@index([columnId, rowIndex])
+  @@index([columnId, groupId, rowIndex])
   @@map("retro_items")
 }
 

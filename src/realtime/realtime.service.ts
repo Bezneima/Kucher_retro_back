@@ -41,7 +41,12 @@ export class RealtimeService {
     }
   }
 
-  async emitToTeam(teamId: number, event: string, payload: unknown) {
+  async emitToTeam(
+    teamId: number,
+    event: string,
+    payload: unknown,
+    excludedUserId?: string,
+  ) {
     if (!this.namespace) {
       this.logger.warn(
         `Skipped broadcast for team ${teamId}: namespace is not initialized`,
@@ -60,6 +65,10 @@ export class RealtimeService {
 
     const socketIds: string[] = [];
     for (const member of teamMembers) {
+      if (excludedUserId && member.userId === excludedUserId) {
+        continue;
+      }
+
       const userSockets = this.userSocketIds.get(member.userId);
       if (!userSockets) {
         continue;

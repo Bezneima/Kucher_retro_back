@@ -105,6 +105,7 @@ export class TeamController {
       teamId,
       TEAM_EVENTS.allCardsVisibilityUpdated,
       result,
+      user.id,
     );
     return result;
   }

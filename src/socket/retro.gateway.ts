@@ -40,6 +40,17 @@ type BoardJoinPayload = {
   boardId: number;
 };
 
+type GroupPositionChangePayload = {
+  groupId: number;
+  newColumnId: number;
+  newOrderIndex: number;
+};
+
+type SyncGroupPositionsPayload = {
+  boardId: number;
+  changes: GroupPositionChangePayload[];
+};
+
 @Public()
 @Injectable()
 @WebSocketGateway({
@@ -179,6 +190,37 @@ export class RetroGateway
     }
   }
 
+  @SubscribeMessage('board.groups.positions.sync')
+  async handleBoardGroupsPositionsSync(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: SyncGroupPositionsPayload,
+  ) {
+    const user = this.requireAuthenticatedUser(client);
+    const boardId = this.parseBoardId(body?.boardId);
+    const changes = this.parseGroupPositionChanges(body?.changes);
+
+    try {
+      const result = await this.retroService.syncGroupPositions(
+        boardId,
+        user.id,
+        changes,
+      );
+      client
+        .to(this.getBoardRoom(boardId))
+        .emit('board.groups.positions.synced', result);
+      client
+        .to(this.getBoardRoom(boardId))
+        .emit('retro.board.groups.positions.synced', result);
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw new WsException(error.message);
+      }
+
+      throw new WsException('Failed to sync group positions');
+    }
+  }
+
   private extractAuthToken(client: Socket): string {
     const token = client.handshake.auth?.token;
 
@@ -220,6 +262,39 @@ export class RetroGateway
     }
 
     return value;
+  }
+
+  private parsePositiveInt(value: unknown, fieldName: string): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+      throw new WsException(`${fieldName} must be a positive integer`);
+    }
+
+    return value;
+  }
+
+  private parseGroupPositionChanges(value: unknown): GroupPositionChangePayload[] {
+    if (!Array.isArray(value)) {
+      throw new WsException('changes must be an array');
+    }
+
+    return value.map((change, index) => {
+      if (typeof change !== 'object' || change === null) {
+        throw new WsException(`changes[${index}] must be an object`);
+      }
+
+      const record = change as Record<string, unknown>;
+      return {
+        groupId: this.parsePositiveInt(record.groupId, `changes[${index}].groupId`),
+        newColumnId: this.parsePositiveInt(
+          record.newColumnId,
+          `changes[${index}].newColumnId`,
+        ),
+        newOrderIndex: this.parseNonNegativeInt(
+          record.newOrderIndex,
+          `changes[${index}].newOrderIndex`,
+        ),
+      };
+    });
   }
 
   private getBoardRoom(boardId: number): string {
