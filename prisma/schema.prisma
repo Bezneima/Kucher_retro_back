@@ -18,6 +18,11 @@ enum AuthProvider {
   GOOGLE @map("google")
 }
 
+enum TimerStatus {
+  RUNNING
+  PAUSED
+}
+
 model RetroBoard {
   id          Int           @id @default(autoincrement())
   teamId      Int
@@ -26,6 +31,7 @@ model RetroBoard {
   date        DateTime
   description String        @default("")
   invite      TeamInvite?
+  timer       BoardTimer?
   columns     RetroColumn[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -44,6 +50,7 @@ model User {
   googleEmail        String?
   teamMemberships    TeamMember[]
   createdInvites     TeamInvite[]
+  createdTimers      BoardTimer[]
   refreshTokens      RefreshToken[]
   authExchangeTokens AuthExchangeToken[]
   retroItemComments RetroItemComment[]
@@ -51,6 +58,24 @@ model User {
   updatedAt          DateTime            @updatedAt
 
   @@map("users")
+}
+
+model BoardTimer {
+  id              Int         @id @default(autoincrement())
+  boardId         Int         @unique
+  createdById     String
+  status          TimerStatus
+  durationSeconds Int
+  remainingSeconds Int
+  startedAt       DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  board           RetroBoard  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  createdBy       User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([status, endsAt])
+  @@map("board_timers")
 }
 
 model Team {

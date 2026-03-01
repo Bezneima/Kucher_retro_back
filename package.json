@@ -12,6 +12,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "test:google-oauth": "ts-node test/google-oauth.flow.test.ts",
+    "test:timer": "ts-node test/timer.service.test.ts && ts-node test/timer-cleanup.service.test.ts",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "prisma:generate": "prisma generate",

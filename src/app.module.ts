@@ -10,6 +10,7 @@ import { RetroModule } from './retro/retro.module';
 import { SocketModule } from './socket/socket.module';
 import { TeamModule } from './team/team.module';
 import { TeamInviteModule } from './team-invite/team-invite.module';
+import { TimerModule } from './timer/timer.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { TeamInviteModule } from './team-invite/team-invite.module';
     TeamModule,
     TeamInviteModule,
     SocketModule,
+    TimerModule,
   ],
   controllers: [AppController],
   providers: [

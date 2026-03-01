@@ -189,3 +189,27 @@ Broadcast для других пользователей в этой доске:
 - `PATCH /retro/groups/:groupId/color`
 - `PATCH /retro/groups/:groupId/description`
 - `DELETE /retro/groups/:groupId`
+
+### Board Timer API
+- `POST /retro/boards/:boardId/timer/start`
+  - body: `{ "seconds": number }` (`1..86400`)
+  - запускает или перезапускает таймер доски
+- `POST /retro/boards/:boardId/timer/pause`
+  - ставит запущенный таймер на паузу
+- `POST /retro/boards/:boardId/timer/resume`
+  - продолжает таймер с сохраненного остатка
+- `DELETE /retro/boards/:boardId/timer`
+  - удаляет текущий таймер доски
+- `GET /retro/boards/:boardId/timer`
+  - возвращает текущий таймер доски или `null`
+
+Realtime события:
+- `retro.timer.started` payload: `{ boardId, timer }`
+- `retro.timer.paused` payload: `{ boardId, timer }`
+- `retro.timer.resumed` payload: `{ boardId, timer }`
+- `retro.timer.deleted` payload: `{ boardId, deleted: true }`
+
+Очистка истекших таймеров:
+- фоновый воркер запускается каждые 30 секунд;
+- удаляются только таймеры `RUNNING`, где `endsAt <= now`;
+- таймеры `PAUSED` не трогаются.
