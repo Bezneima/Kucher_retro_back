@@ -82,6 +82,7 @@ model Team {
   id        Int          @id @default(autoincrement())
   name      String
   isAllCardsHidden Boolean @default(false)
+  isAnonymousBoardAccessEnabled Boolean @default(false)
   members   TeamMember[]
   boards    RetroBoard[]
   invites   TeamInvite[]

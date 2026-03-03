@@ -180,22 +180,32 @@ export class TimerService {
   }
 
   private async getBoardContextOrFail(boardId: number, userId: string): Promise<{ boardId: number; teamId: number }> {
-    const board = await this.prisma.retroBoard.findFirst({
-      where: {
-        id: boardId,
-        team: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
       select: {
         id: true,
         teamId: true,
+        team: {
+          select: {
+            isAnonymousBoardAccessEnabled: true,
+            members: {
+              where: {
+                userId,
+              },
+              select: {
+                id: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
-    if (!board) {
+    if (
+      !board ||
+      (!board.team.isAnonymousBoardAccessEnabled && board.team.members.length === 0)
+    ) {
       throw new NotFoundException(`Board ${boardId} not found`);
     }
 

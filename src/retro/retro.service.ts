@@ -209,21 +209,16 @@ export class RetroService {
   }
 
   async getBoardRealtimeContext(boardId: number, userId: string) {
-    const board = await this.prisma.retroBoard.findFirst({
-      where: {
-        id: boardId,
-        team: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
       select: { teamId: true },
     });
 
     if (!board) {
       throw new NotFoundException(`Board ${boardId} not found`);
     }
+
+    await this.ensureBoardAccessible(boardId, userId);
 
     return {
       teamId: board.teamId,
@@ -232,17 +227,8 @@ export class RetroService {
   }
 
   async getColumnRealtimeContext(columnId: number, userId: string) {
-    const column = await this.prisma.retroColumn.findFirst({
-      where: {
-        id: columnId,
-        board: {
-          team: {
-            members: {
-              some: { userId },
-            },
-          },
-        },
-      },
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
       select: {
         id: true,
         board: {
@@ -258,6 +244,8 @@ export class RetroService {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
 
+    await this.ensureBoardAccessible(column.board.id, userId);
+
     return {
       teamId: column.board.teamId,
       boardId: column.board.id,
@@ -266,19 +254,8 @@ export class RetroService {
   }
 
   async getGroupRealtimeContext(groupId: number, userId: string) {
-    const group = await this.prisma.retroGroup.findFirst({
-      where: {
-        id: groupId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
+    const group = await this.prisma.retroGroup.findUnique({
+      where: { id: groupId },
       select: {
         id: true,
         column: {
@@ -299,6 +276,8 @@ export class RetroService {
       throw new NotFoundException(`Group ${groupId} not found`);
     }
 
+    await this.ensureBoardAccessible(group.column.board.id, userId);
+
     return {
       teamId: group.column.board.teamId,
       boardId: group.column.board.id,
@@ -308,19 +287,8 @@ export class RetroService {
   }
 
   async getItemRealtimeContext(itemId: number, userId: string) {
-    const item = await this.prisma.retroItem.findFirst({
-      where: {
-        id: itemId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
+    const item = await this.prisma.retroItem.findUnique({
+      where: { id: itemId },
       select: {
         id: true,
         column: {
@@ -341,6 +309,8 @@ export class RetroService {
       throw new NotFoundException(`Item ${itemId} not found`);
     }
 
+    await this.ensureBoardAccessible(item.column.board.id, userId);
+
     return {
       teamId: item.column.board.teamId,
       boardId: item.column.board.id,
@@ -350,21 +320,8 @@ export class RetroService {
   }
 
   async getCommentRealtimeContext(commentId: number, userId: string) {
-    const comment = await this.prisma.retroItemComment.findFirst({
-      where: {
-        id: commentId,
-        item: {
-          column: {
-            board: {
-              team: {
-                members: {
-                  some: { userId },
-                },
-              },
-            },
-          },
-        },
-      },
+    const comment = await this.prisma.retroItemComment.findUnique({
+      where: { id: commentId },
       select: {
         id: true,
         item: {
@@ -388,6 +345,8 @@ export class RetroService {
     if (!comment) {
       throw new NotFoundException(`Comment ${commentId} not found`);
     }
+
+    await this.ensureBoardAccessible(comment.item.column.board.id, userId);
 
     return {
       teamId: comment.item.column.board.teamId,
@@ -454,18 +413,10 @@ export class RetroService {
     name?: string,
     description?: string,
   ) {
-    const column = await this.prisma.retroColumn.findFirst({
-      where: {
-        id: columnId,
-        board: {
-          team: {
-            members: {
-              some: { userId },
-            },
-          },
-        },
-      },
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
       select: {
+        boardId: true,
         color: true,
       },
     });
@@ -473,6 +424,8 @@ export class RetroService {
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
+
+    await this.ensureBoardAccessible(column.boardId, userId);
 
     const createdGroup = await this.prisma.retroGroup.create({
       data: {
@@ -504,19 +457,11 @@ export class RetroService {
     description?: string,
     groupId?: number | null,
   ) {
-    const column = await this.prisma.retroColumn.findFirst({
-      where: {
-        id: columnId,
-        board: {
-          team: {
-            members: {
-              some: { userId },
-            },
-          },
-        },
-      },
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
       select: {
         id: true,
+        boardId: true,
         orderIndex: true,
         board: {
           select: {
@@ -533,6 +478,8 @@ export class RetroService {
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
+
+    await this.ensureBoardAccessible(column.boardId, userId);
 
     const normalizedGroupId = groupId ?? null;
 
@@ -684,23 +631,13 @@ export class RetroService {
   }
 
   async toggleItemLike(itemId: number, userId: string) {
-    const item = await this.prisma.retroItem.findFirst({
-      where: {
-        id: itemId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
+    const item = await this.prisma.retroItem.findUnique({
+      where: { id: itemId },
       select: {
         likes: true,
         column: {
           select: {
+            boardId: true,
             board: {
               select: {
                 team: {
@@ -718,6 +655,8 @@ export class RetroService {
     if (!item) {
       throw new NotFoundException(`Item ${itemId} not found`);
     }
+
+    await this.ensureBoardAccessible(item.column.boardId, userId);
 
     const likes = [...item.likes];
     const index = likes.indexOf(userId);
@@ -1227,23 +1166,16 @@ export class RetroService {
   }
 
   async deleteColumn(columnId: number, userId: string) {
-    const column = await this.prisma.retroColumn.findFirst({
-      where: {
-        id: columnId,
-        board: {
-          team: {
-            members: {
-              some: { userId },
-            },
-          },
-        },
-      },
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
       select: { id: true, boardId: true, orderIndex: true },
     });
 
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
+
+    await this.ensureBoardAccessible(column.boardId, userId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.retroColumn.delete({
@@ -1263,29 +1195,25 @@ export class RetroService {
   }
 
   async deleteGroup(groupId: number, userId: string) {
-    const group = await this.prisma.retroGroup.findFirst({
-      where: {
-        id: groupId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
+    const group = await this.prisma.retroGroup.findUnique({
+      where: { id: groupId },
       select: {
         id: true,
         columnId: true,
         orderIndex: true,
+        column: {
+          select: {
+            boardId: true,
+          },
+        },
       },
     });
 
     if (!group) {
       throw new NotFoundException(`Group ${groupId} not found`);
     }
+
+    await this.ensureBoardAccessible(group.column.boardId, userId);
 
     await this.prisma.$transaction(async (tx) => {
       const [ungroupedItems, siblingGroups, groupedItems] = await Promise.all([
@@ -1386,19 +1314,17 @@ export class RetroService {
   }
 
   private async getBoardOrFail(boardId: number, userId: string) {
-    const board = await this.prisma.retroBoard.findFirst({
-      where: {
-        id: boardId,
-        team: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
       include: BOARD_INCLUDE,
     });
 
     if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    const canAccess = await this.hasBoardAccess(boardId, userId);
+    if (!canAccess) {
       throw new NotFoundException(`Board ${boardId} not found`);
     }
 
@@ -1442,21 +1368,56 @@ export class RetroService {
   }
 
   private async ensureBoardAccessible(boardId: number, userId: string) {
-    const board = await this.prisma.retroBoard.findFirst({
-      where: {
-        id: boardId,
-        team: {
-          members: {
-            some: { userId },
-          },
-        },
-      },
-      select: { id: true, teamId: true },
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
+      select: { id: true },
     });
 
     if (!board) {
       throw new NotFoundException(`Board ${boardId} not found`);
     }
+
+    const canAccess = await this.hasBoardAccess(boardId, userId);
+    if (!canAccess) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+  }
+
+  private async hasBoardAccess(boardId: number, userId: string): Promise<boolean> {
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
+      select: {
+        team: {
+          select: {
+            isAnonymousBoardAccessEnabled: true,
+          },
+        },
+      },
+    });
+
+    if (!board) {
+      return false;
+    }
+
+    if (board.team.isAnonymousBoardAccessEnabled) {
+      return true;
+    }
+
+    const teamMember = await this.prisma.teamMember.findFirst({
+      where: {
+        userId,
+        team: {
+          boards: {
+            some: {
+              id: boardId,
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(teamMember);
   }
 
   private async ensureBoardAdminOrOwner(boardId: number, userId: string) {
@@ -1489,85 +1450,47 @@ export class RetroService {
   }
 
   private async ensureColumnAccessible(columnId: number, userId: string) {
-    const column = await this.prisma.retroColumn.findFirst({
-      where: {
-        id: columnId,
-        board: {
-          team: {
-            members: {
-              some: { userId },
-            },
-          },
-        },
-      },
-      select: { id: true },
+    const column = await this.prisma.retroColumn.findUnique({
+      where: { id: columnId },
+      select: { id: true, boardId: true },
     });
 
     if (!column) {
       throw new NotFoundException(`Column ${columnId} not found`);
     }
+
+    await this.ensureBoardAccessible(column.boardId, userId);
   }
 
   private async ensureGroupAccessible(groupId: number, userId: string) {
-    const group = await this.prisma.retroGroup.findFirst({
-      where: {
-        id: groupId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
-      select: { id: true },
+    const group = await this.prisma.retroGroup.findUnique({
+      where: { id: groupId },
+      select: { id: true, column: { select: { boardId: true } } },
     });
 
     if (!group) {
       throw new NotFoundException(`Group ${groupId} not found`);
     }
+
+    await this.ensureBoardAccessible(group.column.boardId, userId);
   }
 
   private async ensureItemAccessible(itemId: number, userId: string) {
-    const item = await this.prisma.retroItem.findFirst({
-      where: {
-        id: itemId,
-        column: {
-          board: {
-            team: {
-              members: {
-                some: { userId },
-              },
-            },
-          },
-        },
-      },
-      select: { id: true },
+    const item = await this.prisma.retroItem.findUnique({
+      where: { id: itemId },
+      select: { id: true, column: { select: { boardId: true } } },
     });
 
     if (!item) {
       throw new NotFoundException(`Item ${itemId} not found`);
     }
+
+    await this.ensureBoardAccessible(item.column.boardId, userId);
   }
 
   private async ensureCommentManageAccess(commentId: number, userId: string) {
-    const comment = await this.prisma.retroItemComment.findFirst({
-      where: {
-        id: commentId,
-        item: {
-          column: {
-            board: {
-              team: {
-                members: {
-                  some: { userId },
-                },
-              },
-            },
-          },
-        },
-      },
+    const comment = await this.prisma.retroItemComment.findUnique({
+      where: { id: commentId },
       select: {
         id: true,
         creatorId: true,
@@ -1577,6 +1500,7 @@ export class RetroService {
               select: {
                 board: {
                   select: {
+                    id: true,
                     teamId: true,
                   },
                 },
@@ -1590,6 +1514,8 @@ export class RetroService {
     if (!comment) {
       throw new NotFoundException(`Comment ${commentId} not found`);
     }
+
+    await this.ensureBoardAccessible(comment.item.column.board.id, userId);
 
     if (comment.creatorId === userId) {
       return;

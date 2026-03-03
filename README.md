@@ -213,3 +213,19 @@ Realtime события:
 - фоновый воркер запускается каждые 30 секунд;
 - удаляются только таймеры `RUNNING`, где `endsAt <= now`;
 - таймеры `PAUSED` не трогаются.
+
+### Anonymous board access (team-level)
+- В `Team` добавлен флаг: `isAnonymousBoardAccessEnabled` (default: `false`).
+- Флаг меняется только `OWNER/ADMIN`:
+  - `PATCH /teams/:teamId/anonymous-board-access`
+  - body: `{ "isAnonymousBoardAccessEnabled": true | false }`
+- Если флаг включен, любой пользователь (включая без JWT) может выполнять board/timer действия по прямой ссылке на доску.
+- Для неавторизованных пользователей действия выполняются от системного guest-пользователя.
+
+Realtime событие изменения флага:
+- `team.anonymous-board-access.updated`
+
+WebSocket (`/ws`) в anonymous-mode:
+- `auth.token` теперь опционален;
+- при включенном флаге команды доступны `board.join`, `board.rename`, `board.columns.reorder`, `board.groups.positions.sync` без JWT;
+- при выключенном флаге поведение доступа остается прежним.

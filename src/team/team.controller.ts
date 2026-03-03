@@ -6,6 +6,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 import {
   AddTeamMemberDto,
   CreateTeamDto,
+  UpdateTeamAnonymousBoardAccessDto,
   UpdateTeamCardsVisibilityDto,
   UpdateTeamDto,
   UpdateTeamMemberRoleDto,
@@ -14,6 +15,7 @@ import { TeamService } from './team.service';
 
 const TEAM_EVENTS = {
   allCardsVisibilityUpdated: 'team.all-cards-visibility.updated',
+  anonymousBoardAccessUpdated: 'team.anonymous-board-access.updated',
 } as const;
 
 @ApiTags('teams')
@@ -104,6 +106,44 @@ export class TeamController {
     await this.realtimeService.emitToTeam(
       teamId,
       TEAM_EVENTS.allCardsVisibilityUpdated,
+      result,
+      user.id,
+    );
+    return result;
+  }
+
+  @Patch(':teamId/anonymous-board-access')
+  @ApiOperation({ summary: 'Update anonymous board access (OWNER/ADMIN only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        isAnonymousBoardAccessEnabled: true,
+      },
+    },
+  })
+  @ApiOkResponse({
+    description: 'Anonymous board access updated',
+    schema: {
+      example: {
+        id: 1,
+        isAnonymousBoardAccessEnabled: true,
+        updatedAt: '2026-03-04T12:30:00.000Z',
+      },
+    },
+  })
+  async updateAnonymousBoardAccess(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Body() body: UpdateTeamAnonymousBoardAccessDto,
+  ) {
+    const result = await this.teamService.updateAnonymousBoardAccess(
+      teamId,
+      user.id,
+      body.isAnonymousBoardAccessEnabled,
+    );
+    await this.realtimeService.emitToTeam(
+      teamId,
+      TEAM_EVENTS.anonymousBoardAccessUpdated,
       result,
       user.id,
     );

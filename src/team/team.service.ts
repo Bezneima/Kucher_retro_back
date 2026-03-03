@@ -16,6 +16,7 @@ type TeamMembershipWithTeam = Prisma.TeamMemberGetPayload<{
       select: {
         id: true;
         name: true;
+        isAnonymousBoardAccessEnabled: true;
         createdAt: true;
         updatedAt: true;
       };
@@ -69,6 +70,7 @@ export class TeamService {
     return {
       id: team.id,
       name: team.name,
+      isAnonymousBoardAccessEnabled: team.isAnonymousBoardAccessEnabled,
       role: team.members[0]?.role ?? TeamRole.OWNER,
       createdAt: team.createdAt,
       updatedAt: team.updatedAt,
@@ -84,6 +86,7 @@ export class TeamService {
           select: {
             id: true,
             name: true,
+            isAnonymousBoardAccessEnabled: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -99,6 +102,7 @@ export class TeamService {
     return memberships.map((membership: TeamMembershipWithTeam) => ({
       id: membership.team.id,
       name: membership.team.name,
+      isAnonymousBoardAccessEnabled: membership.team.isAnonymousBoardAccessEnabled,
       role: membership.role,
       createdAt: membership.team.createdAt,
       updatedAt: membership.team.updatedAt,
@@ -119,6 +123,7 @@ export class TeamService {
       select: {
         id: true,
         name: true,
+        isAnonymousBoardAccessEnabled: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -140,6 +145,24 @@ export class TeamService {
       select: {
         id: true,
         isAllCardsHidden: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateAnonymousBoardAccess(
+    teamId: number,
+    actorUserId: string,
+    isAnonymousBoardAccessEnabled: boolean,
+  ) {
+    await this.ensureTeamAdminOrOwner(teamId, actorUserId);
+
+    return this.prisma.team.update({
+      where: { id: teamId },
+      data: { isAnonymousBoardAccessEnabled },
+      select: {
+        id: true,
+        isAnonymousBoardAccessEnabled: true,
         updatedAt: true,
       },
     });

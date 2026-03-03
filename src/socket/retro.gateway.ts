@@ -11,6 +11,8 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Public } from '../auth/decorators/public.decorator';
+import { AnonymousActorService } from '../auth/anonymous-actor.service';
+import { AccessActor } from '../auth/types/access-actor.type';
 import { RealtimeService } from '../realtime/realtime.service';
 import { RetroService } from '../retro/retro.service';
 import { Namespace, Socket } from 'socket.io';
@@ -70,6 +72,7 @@ export class RetroGateway
     private readonly jwtService: JwtService,
     private readonly retroService: RetroService,
     private readonly realtimeService: RealtimeService,
+    private readonly anonymousActorService: AnonymousActorService,
   ) {}
 
   afterInit(server: Namespace) {
@@ -78,14 +81,16 @@ export class RetroGateway
     server.use(async (socket, next) => {
       try {
         const token = this.extractAuthToken(socket);
-        const payload = await this.jwtService.verifyAsync<WsJwtPayload>(token, {
-          secret: this.accessSecret,
-        });
+        if (token) {
+          const payload = await this.jwtService.verifyAsync<WsJwtPayload>(token, {
+            secret: this.accessSecret,
+          });
 
-        socket.data.user = {
-          id: payload.sub,
-          email: payload.email,
-        } satisfies WsUser;
+          socket.data.user = {
+            id: payload.sub,
+            email: payload.email,
+          } satisfies WsUser;
+        }
 
         next();
       } catch {
@@ -119,12 +124,12 @@ export class RetroGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() body: BoardJoinPayload,
   ) {
-    const user = this.requireAuthenticatedUser(client);
+    const actor = await this.resolveActor(client);
     const boardId = this.parseBoardId(body?.boardId);
 
     try {
       // Reuse existing access checks from RetroService.
-      await this.retroService.getBoardColumns(boardId, user.id);
+      await this.retroService.getBoardColumns(boardId, actor.userId);
       client.join(this.getBoardRoom(boardId));
       return { joined: true, boardId };
     } catch (error) {
@@ -141,12 +146,12 @@ export class RetroGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() body: RenameBoardPayload,
   ) {
-    const user = this.requireAuthenticatedUser(client);
+    const actor = await this.resolveActor(client);
     const boardId = this.parseBoardId(body?.boardId);
     const name = this.parseBoardName(body?.name);
 
     try {
-      const updatedBoard = await this.retroService.updateBoardName(boardId, user.id, name);
+      const updatedBoard = await this.retroService.updateBoardName(boardId, actor.userId, name);
       client.to(this.getBoardRoom(boardId)).emit('board.renamed', updatedBoard);
       return updatedBoard;
     } catch (error) {
@@ -163,7 +168,7 @@ export class RetroGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() body: ReorderColumnsPayload,
   ) {
-    const user = this.requireAuthenticatedUser(client);
+    const actor = await this.resolveActor(client);
     const boardId = this.parseBoardId(body?.boardId);
     const oldIndex = this.parseNonNegativeInt(body?.oldIndex, 'oldIndex');
     const newIndex = this.parseNonNegativeInt(body?.newIndex, 'newIndex');
@@ -171,7 +176,7 @@ export class RetroGateway
     try {
       const columns = await this.retroService.reorderColumns(
         boardId,
-        user.id,
+        actor.userId,
         oldIndex,
         newIndex,
       );
@@ -195,14 +200,14 @@ export class RetroGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() body: SyncGroupPositionsPayload,
   ) {
-    const user = this.requireAuthenticatedUser(client);
+    const actor = await this.resolveActor(client);
     const boardId = this.parseBoardId(body?.boardId);
     const changes = this.parseGroupPositionChanges(body?.changes);
 
     try {
       const result = await this.retroService.syncGroupPositions(
         boardId,
-        user.id,
+        actor.userId,
         changes,
       );
       client
@@ -221,23 +226,29 @@ export class RetroGateway
     }
   }
 
-  private extractAuthToken(client: Socket): string {
+  private extractAuthToken(client: Socket): string | null {
     const token = client.handshake.auth?.token;
 
     if (typeof token !== 'string' || !token.trim()) {
-      throw new Error('Unauthorized');
+      return null;
     }
 
     return token.trim();
   }
 
-  private requireAuthenticatedUser(client: Socket): WsUser {
+  private async resolveActor(client: Socket): Promise<AccessActor> {
     const user = client.data.user as WsUser | undefined;
-    if (!user) {
-      throw new WsException('Unauthorized');
+    if (user) {
+      return {
+        userId: user.id,
+        isAnonymous: false,
+      };
     }
 
-    return user;
+    return {
+      userId: await this.anonymousActorService.getOrCreateGuestUserId(),
+      isAnonymous: true,
+    };
   }
 
   private parseBoardId(boardId: unknown): number {

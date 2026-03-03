@@ -43,3 +43,9 @@ export class UpdateTeamCardsVisibilityDto {
   @IsBoolean()
   isAllCardsHidden!: boolean;
 }
+
+export class UpdateTeamAnonymousBoardAccessDto {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  isAnonymousBoardAccessEnabled!: boolean;
+}
