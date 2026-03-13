@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsHexColor,
   IsInt,
@@ -49,6 +50,19 @@ export class UpdateBoardNameDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
+}
+
+export class BoardSettingsDto {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  showLikes!: boolean;
+}
+
+export class UpdateBoardSettingsDto {
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  showLikes?: boolean;
 }
 
 export class UpdateColumnNameDto {
@@ -473,6 +487,9 @@ export class RetroBoardResponseDto {
 
   @ApiProperty({ example: false })
   isAllCardsHidden!: boolean;
+
+  @ApiProperty({ type: BoardSettingsDto })
+  settings!: BoardSettingsDto;
 
   @ApiProperty({ example: 'Sprint 12 Retro' })
   name!: string;

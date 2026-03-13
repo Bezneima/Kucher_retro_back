@@ -11,6 +11,7 @@ import {
   CreateBoardDto,
   GroupPositionChangeDto,
   ItemPositionChangeDto,
+  UpdateBoardSettingsDto,
 } from './dto/retro.dto';
 
 const ITEM_WITH_COMMENTS_COUNT_INCLUDE = {
@@ -92,6 +93,14 @@ type ColumnColors = {
   buttonColor: string;
 };
 
+type BoardSettings = {
+  showLikes: boolean;
+};
+
+const DEFAULT_BOARD_SETTINGS: BoardSettings = {
+  showLikes: true,
+};
+
 const AVAILABLE_COLUMN_COLORS: readonly ColumnColors[] = [
   // Red
   {
@@ -156,6 +165,7 @@ export class RetroService {
         name: dto.name ?? 'New board',
         date: dto.date ? new Date(dto.date) : new Date(),
         description: dto.description ?? '',
+        settings: DEFAULT_BOARD_SETTINGS satisfies Prisma.InputJsonValue,
         columns: {
           create: [
             {
@@ -368,6 +378,38 @@ export class RetroService {
     return this.mapBoard(board);
   }
 
+  async updateBoardSettings(
+    boardId: number,
+    userId: string,
+    patch: UpdateBoardSettingsDto,
+  ) {
+    await this.ensureBoardAdminOrOwner(boardId, userId);
+
+    const board = await this.prisma.retroBoard.findUnique({
+      where: { id: boardId },
+      select: { settings: true },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board ${boardId} not found`);
+    }
+
+    const mergedSettings = this.mergeBoardSettings(
+      this.normalizeBoardSettings(board.settings),
+      patch,
+    );
+
+    const updatedBoard = await this.prisma.retroBoard.update({
+      where: { id: boardId },
+      data: {
+        settings: mergedSettings satisfies Prisma.InputJsonValue,
+      },
+      include: BOARD_INCLUDE,
+    });
+
+    return this.mapBoard(updatedBoard);
+  }
+
   async createColumn(
     boardId: number,
     userId: string,
@@ -465,6 +507,7 @@ export class RetroService {
         orderIndex: true,
         board: {
           select: {
+            settings: true,
             team: {
               select: {
                 isAllCardsHidden: true,
@@ -543,6 +586,7 @@ export class RetroService {
         createdItem,
         column.orderIndex,
         column.board.team.isAllCardsHidden,
+        this.normalizeBoardSettings(column.board.settings).showLikes,
       ),
     };
   }
@@ -614,7 +658,8 @@ export class RetroService {
   ) {
     await this.ensureItemAccessible(itemId, userId);
 
-    const isAllCardsHidden = await this.getIsAllCardsHiddenByItemId(itemId);
+    const boardVisibilitySettings =
+      await this.getItemBoardVisibilitySettingsByItemId(itemId);
 
     const updatedItem = await this.prisma.retroItem.update({
       where: { id: itemId },
@@ -625,8 +670,9 @@ export class RetroService {
       ...updatedItem,
       description: this.maskItemDescription(
         updatedItem.description,
-        isAllCardsHidden,
+        boardVisibilitySettings.isAllCardsHidden,
       ),
+      likes: boardVisibilitySettings.showLikes ? updatedItem.likes : [],
     };
   }
 
@@ -640,6 +686,7 @@ export class RetroService {
             boardId: true,
             board: {
               select: {
+                settings: true,
                 team: {
                   select: {
                     isAllCardsHidden: true,
@@ -677,13 +724,17 @@ export class RetroService {
         updatedItem.description,
         item.column.board.team.isAllCardsHidden,
       ),
+      likes: this.normalizeBoardSettings(item.column.board.settings).showLikes
+        ? updatedItem.likes
+        : [],
     };
   }
 
   async updateItemColor(itemId: number, userId: string, color?: string) {
     await this.ensureItemAccessible(itemId, userId);
 
-    const isAllCardsHidden = await this.getIsAllCardsHiddenByItemId(itemId);
+    const boardVisibilitySettings =
+      await this.getItemBoardVisibilitySettingsByItemId(itemId);
 
     const updatedItem = await this.prisma.retroItem.update({
       where: { id: itemId },
@@ -694,8 +745,9 @@ export class RetroService {
       ...updatedItem,
       description: this.maskItemDescription(
         updatedItem.description,
-        isAllCardsHidden,
+        boardVisibilitySettings.isAllCardsHidden,
       ),
+      likes: boardVisibilitySettings.showLikes ? updatedItem.likes : [],
     };
   }
 
@@ -926,6 +978,7 @@ export class RetroService {
               isAllCardsHidden: true,
             },
           },
+          settings: true,
         },
       }),
       this.prisma.retroColumn.findMany({
@@ -949,7 +1002,11 @@ export class RetroService {
       updated: changes.length,
       changedColumnIds: changedColumns.map((column) => column.id),
       columns: changedColumns.map((column) =>
-        this.mapColumn(column, board.team.isAllCardsHidden),
+        this.mapColumn(
+          column,
+          board.team.isAllCardsHidden,
+          this.normalizeBoardSettings(board.settings).showLikes,
+        ),
       ),
     };
   }
@@ -1137,6 +1194,7 @@ export class RetroService {
               isAllCardsHidden: true,
             },
           },
+          settings: true,
         },
       }),
       this.prisma.retroColumn.findMany({
@@ -1160,7 +1218,11 @@ export class RetroService {
       updated: changes.length,
       changedColumnIds: changedColumns.map((column) => column.id),
       columns: changedColumns.map((column) =>
-        this.mapColumn(column, board.team.isAllCardsHidden),
+        this.mapColumn(
+          column,
+          board.team.isAllCardsHidden,
+          this.normalizeBoardSettings(board.settings).showLikes,
+        ),
       ),
     };
   }
@@ -1723,12 +1785,13 @@ export class RetroService {
     item: RetroItemWithCount,
     columnIndex: number,
     isAllCardsHidden: boolean,
+    showLikes: boolean,
   ) {
     return {
       id: item.id,
       description: this.maskItemDescription(item.description, isAllCardsHidden),
       createdAt: item.createdAt,
-      likes: item.likes,
+      likes: showLikes ? item.likes : [],
       color: item.color ?? undefined,
       columnIndex,
       rowIndex: item.rowIndex,
@@ -1741,6 +1804,7 @@ export class RetroService {
     group: RetroBoardGroup | RetroGroupWithItems,
     columnIndex: number,
     isAllCardsHidden: boolean,
+    showLikes: boolean,
   ) {
     return {
       id: group.id,
@@ -1751,7 +1815,12 @@ export class RetroService {
       orderIndex: group.orderIndex,
       isNameEditing: false,
       items: group.items.map((item) =>
-        this.mapItem(item as RetroItemWithCount, columnIndex, isAllCardsHidden),
+        this.mapItem(
+          item as RetroItemWithCount,
+          columnIndex,
+          isAllCardsHidden,
+          showLikes,
+        ),
       ),
     };
   }
@@ -1759,12 +1828,18 @@ export class RetroService {
   private mapColumn(
     column: RetroBoardColumn | RetroColumnWithItems,
     isAllCardsHidden: boolean,
+    showLikes: boolean,
   ) {
     const mappedItems = column.items.map((item) =>
-      this.mapItem(item as RetroItemWithCount, column.orderIndex, isAllCardsHidden),
+      this.mapItem(
+        item as RetroItemWithCount,
+        column.orderIndex,
+        isAllCardsHidden,
+        showLikes,
+      ),
     );
     const mappedGroups = column.groups.map((group) =>
-      this.mapGroup(group, column.orderIndex, isAllCardsHidden),
+      this.mapGroup(group, column.orderIndex, isAllCardsHidden, showLikes),
     );
     const entries = [
       ...mappedItems.map((item) => ({
@@ -1792,15 +1867,18 @@ export class RetroService {
   }
 
   private mapBoard(board: RetroBoardWithColumns) {
+    const settings = this.normalizeBoardSettings(board.settings);
+
     return {
       id: board.id,
       teamId: board.teamId,
       isAllCardsHidden: board.team.isAllCardsHidden,
+      settings,
       name: board.name,
       date: board.date.toISOString().slice(0, 10),
       description: board.description,
       columns: board.columns.map((column: RetroBoardColumn) =>
-        this.mapColumn(column, board.team.isAllCardsHidden),
+        this.mapColumn(column, board.team.isAllCardsHidden, settings.showLikes),
       ),
     };
   }
@@ -1819,7 +1897,7 @@ export class RetroService {
     };
   }
 
-  private async getIsAllCardsHiddenByItemId(itemId: number) {
+  private async getItemBoardVisibilitySettingsByItemId(itemId: number) {
     const item = await this.prisma.retroItem.findUnique({
       where: { id: itemId },
       select: {
@@ -1832,6 +1910,7 @@ export class RetroService {
                     isAllCardsHidden: true,
                   },
                 },
+                settings: true,
               },
             },
           },
@@ -1843,7 +1922,11 @@ export class RetroService {
       throw new NotFoundException(`Item ${itemId} not found`);
     }
 
-    return item.column.board.team.isAllCardsHidden;
+    return {
+      isAllCardsHidden: item.column.board.team.isAllCardsHidden,
+      showLikes: this.normalizeBoardSettings(item.column.board.settings)
+        .showLikes,
+    };
   }
 
   private maskItemDescription(
@@ -1851,6 +1934,29 @@ export class RetroService {
     isAllCardsHidden: boolean,
   ) {
     return isAllCardsHidden ? '' : description;
+  }
+
+  private normalizeBoardSettings(settings: Prisma.JsonValue): BoardSettings {
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      return { ...DEFAULT_BOARD_SETTINGS };
+    }
+
+    const value = settings as Record<string, unknown>;
+    return {
+      showLikes:
+        typeof value.showLikes === 'boolean'
+          ? value.showLikes
+          : DEFAULT_BOARD_SETTINGS.showLikes,
+    };
+  }
+
+  private mergeBoardSettings(
+    current: BoardSettings,
+    patch: UpdateBoardSettingsDto,
+  ): BoardSettings {
+    return {
+      showLikes: patch.showLikes ?? current.showLikes,
+    };
   }
 
   private toColumnColors(color: Prisma.JsonValue): ColumnColors {

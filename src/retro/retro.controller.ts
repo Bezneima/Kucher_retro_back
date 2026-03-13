@@ -39,6 +39,7 @@ import {
   SyncItemPositionsResponseDto,
   SyncItemPositionsDto,
   UpdateBoardNameDto,
+  UpdateBoardSettingsDto,
   UpdateColumnColorDto,
   UpdateColumnDescriptionDto,
   UpdateColumnNameDto,
@@ -53,6 +54,7 @@ import { RetroService } from './retro.service';
 
 const RETRO_EVENTS = {
   boardRenamed: 'retro.board.renamed',
+  boardSettingsUpdated: 'retro.board.settings.updated',
   boardColumnsReordered: 'retro.board.columns.reordered',
   boardGroupsPositionsSynced: 'retro.board.groups.positions.synced',
   boardItemPositionsSynced: 'retro.board.items.positions.synced',
@@ -160,6 +162,40 @@ export class RetroController {
       context.teamId,
       RETRO_EVENTS.boardRenamed,
       updatedBoard,
+      this.toExcludedUserId(actor),
+    );
+    return updatedBoard;
+  }
+
+  @Patch('boards/:boardId/settings')
+  @ApiOperation({ summary: 'Update board settings (OWNER/ADMIN only)' })
+  @ApiBody({
+    schema: {
+      example: {
+        showLikes: false,
+      },
+    },
+  })
+  @ApiOkResponse({ type: RetroBoardResponseDto })
+  async updateBoardSettings(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('boardId', ParseIntPipe) boardId: number,
+    @Body() body: UpdateBoardSettingsDto,
+  ) {
+    const actor = await this.resolveActor(user);
+    const context = await this.retroService.getBoardRealtimeContext(boardId, actor.userId);
+    const updatedBoard = await this.retroService.updateBoardSettings(
+      boardId,
+      actor.userId,
+      body,
+    );
+    await this.realtimeService.emitToTeam(
+      context.teamId,
+      RETRO_EVENTS.boardSettingsUpdated,
+      {
+        boardId: context.boardId,
+        settings: updatedBoard.settings,
+      },
       this.toExcludedUserId(actor),
     );
     return updatedBoard;

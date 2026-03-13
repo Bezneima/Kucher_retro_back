@@ -30,6 +30,7 @@ model RetroBoard {
   name        String
   date        DateTime
   description String        @default("")
+  settings    Json          @default("{\"showLikes\":true}")
   invite      TeamInvite?
   timer       BoardTimer?
   columns     RetroColumn[]
